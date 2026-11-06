@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     # The first run fetches every archived page politely (>=5 s apart); later runs hit the cache.
     timeout-minutes: 330
+    env:
+      # Data-dependent tests and build steps fail here instead of skipping when a table is missing.
+      BOFFO_REQUIRE_DATA: "1"
     steps:
       - uses: actions/checkout@v7
 

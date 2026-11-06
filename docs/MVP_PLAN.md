@@ -70,10 +70,11 @@ The repo is public, so it holds **code, docs, and cited manual CSVs only**. No s
 `title_id` (IMDb tconst taken from Wikidata P345, or `bb_xxxx` if unmatched) · `wikidata_qid` (nullable) · `title` · `year` · `release_date` (original domestic) · `distributor` · `genres` · `mpaa` · `pre1982_baseline_gross` (nullable) · `baseline_source`
 
 **`releases.parquet`**: one row per *release* (original, 1985 re-release, special edition…)
-`release_id` · `title_id` · `label` (e.g. "1997 Special Edition") · `release_date` · `source_key` (legacy mojo id / BOM rl id)
+`release_id` (`legacy:<movie_id>` for stat695) · `title_id` · `label` (e.g. "1997 Special Edition"; null for an original) · `release_date` · `source_key` (legacy mojo id / BOM rl id) · `source` · `title` (as charted) · `distributor` · `genres` · `mpaa` · `first_weekend` · `last_weekend` · `weekends` · `is_rerelease` · `rerelease_reason` (which detection rule fired, see `stat695.detect_rereleases`) · `parent_release_id` · `group_source` (`auto` | `manual`)
+- Until M3 matches titles, `title_id` is a provisional `bb_` id from the root release's legacy id, so detected re-releases already share one.
 
 **`snapshots.parquet`**: one row per release per weekend it charted
-`weekend_end` (date, Sunday) · `release_id` · `title_id` · `rank` · `weekend_gross` · `theaters` · `total_gross` (cumulative for that release) · `source` (`stat695` | `wayback` | `commoncrawl`) · `capture_url` (the archive capture the row came from; null for stat695) · `is_estimate`
+`weekend_end` (date, Sunday; the chart's own end date, and `checks.py` flags any that aren't Sundays) · `release_id` · `title_id` · `rank` · `weekend_gross` · `theaters` · `total_gross` (cumulative for that release) · `weeks` (weekends in release, as charted) · `source` (`stat695` | `wayback` | `commoncrawl`) · `capture_url` (the archive capture the row came from; null for stat695) · `is_estimate`
 
 **`title_cume.parquet`**: precomputed per title per weekend where it changed (this drives the time machine)
 `title_id` · `as_of` (weekend_end) · `cume_nominal` · `cume_cpi` (in constant dollars of a fixed base month; see Inflation) · `cume_admissions`
@@ -109,7 +110,7 @@ Credits and titles come from **Wikidata (CC0)**, not the IMDb datasets. IMDb's n
 - **Accept:** `make test` passes (with placeholder tests); the site dev server shows a "Hello 1999" page in the theme from DESIGN.md; the workflows are valid and `make guard` passes.
 
 ### M1 — Ingest 1982–2016 (stat695data)
-- Fetch `mojo.rda` from `https://github.com/schloerke/stat695data` (MIT, Purdue STAT 695) via `fetch.py` in CI. It's cached in `data/raw/` and never committed. Pin the commit SHA in the URL so the input is reproducible.
+- Fetch `mojo.rda` from `https://github.com/schloerke/stat695data` (MIT, Purdue STAT 695) via `fetch.py` in CI. It's cached in `data/raw/` and never committed. Pin the commit SHA in the URL so the input is reproducible. (Pinned to `7a8d5bb`; the build also checks the file's git blob id.)
 - Unit-test the parser against a tiny **synthetic** `.rda`/DataFrame fixture built in the test, not a slice of the real file.
 - Read with `pyreadr`. Columns include: year, week, rank_this_week, title, studio, weekend_gross, theater_count, total_gross, week_num, movie_id (legacy Mojo id like `ongoldenpond`), start_date, end_date, release_date, genres, mpaa. 116,663 rows, 13,499 movie_ids; years 1982–2016 (verify; coverage may extend into early 2017).
 - Normalize to the `snapshots` schema (weekend_end = `end_date`). Each legacy `movie_id` becomes one `release`.

@@ -16,7 +16,7 @@ Looks like 1999. Works like 2026.
 
 ## MVP progress
 - [x] M0 Scaffold
-- [ ] M1 Ingest 1982–2016
+- [x] M1 Ingest 1982–2016
 - [ ] M2 Ingest 2017 → present
 - [ ] M3 Identity matching
 - [ ] M4 Credits & people
