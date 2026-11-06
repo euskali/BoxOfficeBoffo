@@ -1,4 +1,4 @@
-# BoxOfficeBoffo — Roadmap
+# BoxOfficeBozo — Roadmap
 
 **What it is:** a free, non-commercial hobby site that brings back what old Box Office Mojo did well, plus one feature it never had:
 **"time machine" rankings** — pick any film and any date and see exactly where it stood on every cumulative list *at that moment*

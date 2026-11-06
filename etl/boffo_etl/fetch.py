@@ -29,7 +29,7 @@ import httpx
 from . import paths
 
 USER_AGENT = (
-    "BoxOfficeBoffo-ETL/0.1 (+https://github.com/euskali/BoxOfficeBoffo; "
+    "BoxOfficeBozo-ETL/0.1 (+https://github.com/euskali/BoxOfficeBozo; "
     "non-commercial hobby project)"
 )
 

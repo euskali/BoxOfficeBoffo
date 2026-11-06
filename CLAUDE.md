@@ -1,4 +1,4 @@
-# CLAUDE.md — BoxOfficeBoffo
+# CLAUDE.md — BoxOfficeBozo
 
 Hobby, non-commercial site: historical domestic box office rankings **as of any date**, with a late-90s fan-site look built with modern Tailwind.
 
@@ -13,6 +13,7 @@ Hobby, non-commercial site: historical domestic box office rankings **as of any 
 - ETL: Python 3.12, `uv` (project in `etl/`), polars, duckdb, pyreadr, httpx, rapidfuzz, pytest. Package `etl/boffo_etl`, tests in `etl/tests/`.
 - Site: Vite + React + TypeScript + Tailwind v4 + DuckDB-WASM + uPlot + react-router. Static, deployed to GitHub Pages.
 - CI: GitHub Actions. `ci.yml` runs on PRs (guard, pytest, vitest, `checks.py`, site build). `deploy.yml` runs on push to `main`: the `data-build` job fetches, builds the Parquet and the site, and uploads the Pages artifact. Then the `deploy` job publishes it.
+- Live at https://boxofficebozo.com (GitHub Pages custom domain, verified on the account; Cloudflare DNS records are DNS only, never proxied). The `SITE_BASE_PATH` repo variable is `/`. Internal names (`boffo_etl`, `BOFFO_*` env vars, the local folder) predate the BoxOfficeBozo rename and are intentional.
 - Data ships to the site as Parquet in `site/public/data/`. It is **built in CI, gitignored, and published only inside the Pages artifact.**
 
 ## Data sources (and what's banned)

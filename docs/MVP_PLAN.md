@@ -178,7 +178,7 @@ Credits and titles come from **Wikidata (CC0)**, not the IMDb datasets. IMDb's n
 ### M8 — Data notes and launch
 - About page in monospace FAQ style: sources and licenses (mirroring `DATA_NOTICE.md`), what "domestic" means (US + Canada), estimates vs actuals, the baseline approach, CPI vs admissions, re-release grouping, known gaps, and how to request a takedown or correction.
 - Footer credits: Purdue stat695data, Internet Archive Wayback Machine, Common Crawl, Wikidata (CC0), BLS, plus the not-affiliated line.
-- GitHub Pages deploys from M0 on. Optional: point `boxofficeboffo.com` at it (set the `SITE_BASE_PATH` repo variable to `/`).
+- GitHub Pages deploys from M0 on, at the custom domain https://boxofficebozo.com (Cloudflare DNS, records set to DNS only; the `SITE_BASE_PATH` repo variable is `/`).
 - **Accept:** from an empty Actions cache, `deploy.yml` runs end to end (`data-build` → `deploy`) and the deployed site works. A fresh clone passes `make setup && make test && make site-build`. `DATA_NOTICE.md` and the About page list exactly the sources the build uses.
 
 ---

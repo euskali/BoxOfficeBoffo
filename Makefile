@@ -1,4 +1,4 @@
-# BoxOfficeBoffo task runner. CI runs these same targets.
+# BoxOfficeBozo task runner. CI runs these same targets.
 # Windows: install GNU make (e.g. `winget install ezwinports.make`) or run the commands by hand.
 
 UV  ?= uv

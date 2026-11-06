@@ -36,7 +36,7 @@ Dark mode is optional but fun: navy background, light text, cyan links, like a l
 
 ## Layout patterns
 - **Fixed-width feel, fluid in reality.** Center a container with a max width of about 980px. On mobile, collapse the sidebar under the content. Never horizontal-scroll the page, only wide tables inside their own scroll box.
-- **Top banner:** the "BoxOfficeBoffo" wordmark in bold Verdana or Georgia, a tagline ("Box office history, as it happened"), and a thin nav bar of text links separated by `|`.
+- **Top banner:** the "BoxOfficeBozo" wordmark in bold Verdana or Georgia, a tagline ("Box office history, as it happened"), and a thin nav bar of text links separated by `|`.
 - **Left sidebar boxes** (desktop): each box has a navy header bar ("SEARCH", "THIS WEEKEND IN 1993", "TOP DIRECTORS", "SITE NEWS"), with bulleted text links inside.
 - **Section header bars:** full-width navy bar, white bold small-caps text, with an optional `»` prefix.
 - **Tables are the star:** dense zebra rows, a sticky header, right-aligned numbers in tabular-nums, sortable headers with ▲▼, and the current film highlighted in pale yellow.

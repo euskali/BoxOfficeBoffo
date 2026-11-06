@@ -132,7 +132,7 @@ def test_wayback_url_allowed_and_cached_with_meta(repo, fetch_on):
     assert meta["status"] == 200 and meta["bytes"] == 15
     assert meta["content_type"] == "text/html" and len(meta["sha256"]) == 64
     assert meta["fetched_at"]
-    assert rec.requests[0].headers["user-agent"].startswith("BoxOfficeBoffo-ETL/0.1")
+    assert rec.requests[0].headers["user-agent"].startswith("BoxOfficeBozo-ETL/0.1")
 
 
 def test_suffix_override(fetch_on):

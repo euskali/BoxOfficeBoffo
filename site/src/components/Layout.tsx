@@ -18,7 +18,7 @@ const BADGES = [
   { file: 'badge-any-browser.svg', alt: 'Best viewed in any browser' },
 ]
 
-const REPO_URL = 'https://github.com/euskali/BoxOfficeBoffo'
+const REPO_URL = 'https://github.com/euskali/BoxOfficeBozo'
 const NOTICE_URL = `${REPO_URL}/blob/main/DATA_NOTICE.md`
 
 function Sidebar() {
@@ -81,7 +81,7 @@ export default function Layout() {
       <header className="mt-2 border border-edge">
         <div className="bg-row-alt px-3 py-2">
           <div className="font-[Georgia,serif] text-[28px] font-bold leading-tight text-ink">
-            BoxOfficeBoffo
+            BoxOfficeBozo
           </div>
           <div className="text-small text-muted">Box office history, as it happened</div>
         </div>
