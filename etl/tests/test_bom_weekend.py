@@ -288,6 +288,21 @@ def test_match_weekend_is_one_to_one_and_needs_evidence():
     assert sorted(bw.match_weekend(legacy, new)) == [("legacy:a", "rl1", 0), ("legacy:b", "rl2", 0)]
 
 
+def test_match_weekend_handles_renamed_and_year_tagged_titles():
+    legacy = [{"release_id": "legacy:passengers2016", "title": "Passengers (2016)", "rank": 3,
+               "weekend_gross": 8_000_000, "total_gross": 61_000_000},
+              {"release_id": "legacy:sw7", "title": "The Force Unleashed", "rank": 9,
+               "weekend_gross": 2_500_000, "total_gross": 900_000_000},
+              {"release_id": "legacy:tiny", "title": "Tiny Film", "rank": 40, "weekend_gross": 5_000,
+               "total_gross": 70_000}]
+    new = [{"key": "rl1", "title": "Passengers", "rank": 3, "weekend_gross": 8_000_100, "total_gross": 61_000_000},
+           {"key": "rl2", "title": "Star Wars: Episode VII - The Force Unleashed", "rank": 9,
+            "weekend_gross": 2_500_000, "total_gross": 900_050_000},
+           {"key": "rl3", "title": "Another Tiny Film", "rank": 41, "weekend_gross": 5_000, "total_gross": 9_000}]
+    assert sorted(bw.match_weekend(legacy, new)) == [("legacy:passengers2016", "rl1", 1), ("legacy:sw7", "rl2", 2)]
+    assert bw.title_similarity("Passengers (2016)", "Passengers") == 100
+
+
 def test_link_continuity_needs_a_unique_title_and_growing_totals():
     main = pl.DataFrame([
         {"key": "rl1", "style": "new", "title": "Comeback", "weekend_end": date(2017, 3, 5), "weeks": 20,

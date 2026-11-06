@@ -366,8 +366,13 @@ def rows_frame(results: list[WeekendResult]) -> pl.DataFrame:
 
 # --- stitching to stat695data ---------------------------------------------------------
 
+_YEAR_SUFFIX_RE = re.compile(r"\s*\((?:19|20)\d{2}\)\s*$")
+BIG_WEEKEND = 100_000  # an exactly equal weekend gross this big on the same weekend is the same film
+
+
 def _base(title: str | None) -> str:
-    return normalize_title(split_title(title or "")[0])
+    """Comparable title: no re-release suffix, no "(2016)" disambiguator, normalized."""
+    return normalize_title(_YEAR_SUFFIX_RE.sub("", split_title(title or "")[0]))
 
 
 def title_similarity(a: str | None, b: str | None) -> float:
@@ -375,17 +380,29 @@ def title_similarity(a: str | None, b: str | None) -> float:
     return fuzz.ratio(x, y) if x and y else 0.0
 
 
+def _close(a: int | None, b: int | None, tol: float) -> bool:
+    return bool(a) and bool(b) and abs(a - b) <= tol * max(a, b)
+
+
 def _pair_tier(leg: dict, new: dict) -> tuple[int, float] | None:
+    """How strongly a stat695 row and a new-style row on the same weekend look like one film
+    (0 strongest), or None. Box Office Mojo renamed some films on the new site, so big equal
+    grosses count without the title."""
     sim = title_similarity(leg["title"], new["title"])
-    wg_equal = leg["weekend_gross"] is not None and leg["weekend_gross"] == new["weekend_gross"]
-    tg_equal = leg["total_gross"] is not None and leg["total_gross"] == new["total_gross"]
+    wg, tg = leg["weekend_gross"], leg["total_gross"]
+    wg_equal = wg is not None and wg == new["weekend_gross"]
+    tg_equal = tg is not None and tg == new["total_gross"]
     if wg_equal and (tg_equal or sim >= 80):
         return 0, sim
-    if tg_equal and sim >= 60:
+    if tg_equal and (sim >= 60 or _close(wg, new["weekend_gross"], 0.01)):
         return 1, sim
-    if sim >= TITLE_MATCH and leg["weekend_gross"] and new["weekend_gross"]:
-        if abs(leg["weekend_gross"] - new["weekend_gross"]) <= 0.02 * max(leg["weekend_gross"], new["weekend_gross"]):
-            return 2, sim
+    if wg_equal and wg >= BIG_WEEKEND:
+        return 2, sim
+    if sim >= TITLE_MATCH and _close(wg, new["weekend_gross"], 0.02):
+        return 3, sim
+    if (leg.get("rank") is not None and leg.get("rank") == new.get("rank")
+            and _close(wg, new["weekend_gross"], 0.01) and _close(tg, new["total_gross"], 0.01)):
+        return 4, sim
     return None
 
 
