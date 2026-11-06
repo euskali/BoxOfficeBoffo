@@ -2,7 +2,7 @@ import SectionBar from '../components/SectionBar'
 
 const MILESTONES = [
   { id: 'M0', name: 'Scaffold', status: 'Done' },
-  { id: 'M1', name: 'Ingest 1982–2016', status: 'Coming soon' },
+  { id: 'M1', name: 'Ingest 1982–2016', status: 'Done' },
   { id: 'M2', name: 'Ingest 2017 → present', status: 'Coming soon' },
   { id: 'M3', name: 'Identity matching', status: 'Coming soon' },
   { id: 'M4', name: 'Credits & people', status: 'Coming soon' },
