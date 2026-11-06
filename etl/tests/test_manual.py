@@ -18,10 +18,10 @@ def test_committed_manual_dir_is_valid():
     assert errors(issues) == []
 
 
-def test_committed_manual_csvs_have_headers_only():
+def test_committed_manual_csvs_have_exact_headers():
     for name, schema in SCHEMAS.items():
         lines = (REAL_REPO_ROOT / "data" / "manual" / name).read_text(encoding="utf-8").splitlines()
-        assert lines == [",".join(schema.columns)], f"{name} must be headers-only in M0"
+        assert lines[0] == ",".join(schema.columns), name
 
 
 def write(repo: Path, name: str, *rows: str, header: str | None = None) -> None:

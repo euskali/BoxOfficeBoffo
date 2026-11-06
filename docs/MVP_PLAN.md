@@ -115,6 +115,7 @@ Credits and titles come from **Wikidata (CC0)**, not the IMDb datasets. IMDb's n
 - Read with `pyreadr`. Columns include: year, week, rank_this_week, title, studio, weekend_gross, theater_count, total_gross, week_num, movie_id (legacy Mojo id like `ongoldenpond`), start_date, end_date, release_date, genres, mpaa. 116,663 rows, 13,499 movie_ids; years 1982–2016 (verify; coverage may extend into early 2017).
 - Normalize to the `snapshots` schema (weekend_end = `end_date`). Each legacy `movie_id` becomes one `release`.
 - Detect re-releases: legacy ids or titles containing "re-release", "(Special Edition)", "(3D)", "(IMAX)" style suffixes, or a `release_date` far later than an earlier same-title release.
+  - *Learned from the real data (Nov 2026):* Box Office Mojo reuses titles for remakes and unrelated films, and its legacy ids follow the title. A same-title match on its own was wrong in all 79 cases, and a late first chart meant late tracking, not a re-release. So only title wording and 3D/IMAX suffixes mark a re-release, and it links to an earlier release only when the distributor matches or that release is itself a re-issue. See `stat695.detect_rereleases`; fix the rest in `title_groups.csv` or through M3.
 - **Accept:** snapshot count matches the source. No weekend has duplicate ranks. `total_gross` is non-decreasing per release (log and flag violations rather than fixing them silently).
 
 ### M2 — Ingest 2017 → present

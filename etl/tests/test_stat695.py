@@ -233,11 +233,16 @@ def test_blank_strings_become_null():
         ("Moon Llama (Special Edition)", "Moon Llama", "Special Edition", "reissue"),
         ("Moon Llama (2003 Re-release)", "Moon Llama", "2003 Re-release", "reissue"),
         ("Moon Llama (re-issue)", "Moon Llama", "re-issue", "reissue"),
+        ("Moon Llama (Extended Edition)", "Moon Llama", "Extended Edition", "reissue"),
         ("Moon Llama: 20th Anniversary", "Moon Llama", "20th Anniversary", "reissue"),
         ("Moon Llama - The Return - 20th Anniversary", "Moon Llama - The Return", "20th Anniversary", "reissue"),
+        ("Moon Llama: The Final Cut", "Moon Llama", "The Final Cut", "weak_reissue"),
+        ("Moon Llama - Final Cut", "Moon Llama", "Final Cut", "weak_reissue"),
+        ("Moon Llama: The Director's Cut", "Moon Llama", "The Director's Cut", "reissue"),
         ("Moon Llama 3D", "Moon Llama", "3D", "format"),
         ("Moon Llama (3-D)", "Moon Llama", "3-D", "format"),
         ("Moon Llama (IMAX)", "Moon Llama", "IMAX", "format"),
+        ("Moon Llama in Disney Digital 3-D", "Moon Llama", "in Disney Digital 3-D", "format"),
         ("Moon Llama: An IMAX 3D Experience", "Moon Llama: An IMAX 3D Experience", None, None),
         ("Moon Llama (An IMAX 3D Experience)", "Moon Llama", "An IMAX 3D Experience", "format"),
         ("Moon Llama 3D (Special Edition)", "Moon Llama", "3D Special Edition", "reissue"),
@@ -255,15 +260,16 @@ def test_normalize_title():
     assert normalize_title("M.O.O.N.") == "moon"
 
 
-def rel(movie_id, title, first, release=None):
-    return {"movie_id": movie_id, "title": title, "first_weekend": first, "release_date": release or first}
+def rel(movie_id, title, first, dist="Imaginary", release=None):
+    return {"movie_id": movie_id, "title": title, "first_weekend": first, "distributor": dist,
+            "release_date": release or first}
 
 
 def detect(*rels):
     return {r["movie_id"]: r for r in detect_rereleases(list(rels))}
 
 
-def test_title_keyword_links_to_original():
+def test_title_keyword_links_to_original_from_the_same_distributor():
     out = detect(
         rel("moonllama", "Moon Llama", date(1983, 1, 9)),
         rel("moonllamaspecial", "Moon Llama (Special Edition)", date(1997, 1, 31)),
@@ -279,57 +285,61 @@ def test_title_keyword_without_original_in_data():
     assert r["is_rerelease"] and r["parent_movie_id"] is None and r["label"] == "1989 re-issue"
 
 
-def test_id_suffix():
+def test_reissue_is_not_linked_to_a_different_film_with_the_same_title():
+    # A 2010 re-issue of an old classic, and an unrelated 1983 film (say, a remake) of the same name.
+    out = detect(
+        rel("gasp", "Gasp", date(1983, 5, 15), dist="Big Studio"),
+        rel("gasp2010reissue", "Gasp (2010 re-issue)", date(2010, 5, 30), dist="Arthouse"),
+    )
+    r = out["gasp2010reissue"]
+    assert r["is_rerelease"] and r["parent_movie_id"] is None
+
+
+def test_reissues_of_one_classic_link_to_each_other():
+    out = detect(
+        rel("gasp", "Gasp", date(1983, 5, 15), dist="Big Studio"),
+        rel("gasp98", "Gasp (1998 re-issue)", date(1998, 10, 4), dist="Arthouse A"),
+        rel("gasp2010", "Gasp (2010 re-issue)", date(2010, 5, 30), dist="Arthouse B"),
+    )
+    assert out["gasp98"]["parent_movie_id"] is None
+    assert out["gasp2010"]["parent_movie_id"] == "gasp98"
+
+
+def test_weak_reissue_wording_needs_an_earlier_release():
     out = detect(
         rel("moonllama", "Moon Llama", date(1983, 1, 9)),
-        rel("moonllamase", "Moon Llama", date(1997, 1, 31)),
-        rel("moonllama20th", "Moon Llama", date(2003, 3, 22)),
-        rel("tortoise", "Tortoise", date(1990, 1, 7)),
-        rel("tortoisese", "Unrelated Title", date(1995, 1, 8)),
+        rel("moonllamafinal", "Moon Llama: The Final Cut", date(2007, 10, 7)),
+        rel("urbanmyth2", "Urban Myth: Final Cut", date(2000, 9, 24)),  # a sequel's title
     )
-    assert out["moonllamase"]["rerelease_reason"] == "id_suffix"
-    assert out["moonllamase"]["label"] == "1997 re-release"
-    assert out["moonllama20th"]["parent_movie_id"] == "moonllama"
-    # Id looks like a suffix match but the titles disagree.
-    assert out["tortoisese"]["is_rerelease"] is False
+    assert out["moonllamafinal"]["rerelease_reason"] == "title_keyword"
+    assert out["moonllamafinal"]["parent_movie_id"] == "moonllama"
+    assert out["urbanmyth2"]["is_rerelease"] is False
 
 
-def test_format_rerelease_needs_a_long_gap():
+def test_format_rerelease_needs_same_distributor_and_a_long_gap():
     out = detect(
         rel("moonllama", "Moon Llama", date(1994, 6, 19)),
         rel("moonllama3d", "Moon Llama 3D", date(2011, 9, 18)),
         rel("dancestep", "Dance Step", date(2006, 8, 13)),
         rel("dancestep3d", "Dance Step 3D", date(2010, 8, 8)),  # a sequel, 4 years on
+        rel("nutcase", "The Nutcase", date(1993, 11, 28), dist="Big Studio"),
+        rel("nutcase3d", "The Nutcase in 3D", date(2010, 11, 28), dist="Indie"),  # a new film
         rel("oddsaw", "Odd Saw 3D", date(2010, 10, 31)),  # nothing earlier to re-release
     )
     r = out["moonllama3d"]
     assert (r["rerelease_reason"], r["parent_movie_id"], r["label"]) == ("format_rerelease", "moonllama", "2011 3D")
-    assert out["dancestep3d"]["is_rerelease"] is False
-    assert out["oddsaw"]["is_rerelease"] is False
+    for mid in ("dancestep3d", "nutcase3d", "oddsaw"):
+        assert out[mid]["is_rerelease"] is False and out[mid]["parent_movie_id"] is None, mid
 
 
-def test_release_date_gap():
-    out = detect(
-        rel("spaceopera", "Space Opera", date(1982, 8, 22), release=date(1977, 5, 25)),
-        rel("goldenlake", "Golden Lake", date(1982, 1, 10), release=date(1981, 12, 4)),
-    )
-    r = out["spaceopera"]
-    assert (r["rerelease_reason"], r["label"], r["parent_movie_id"]) == ("release_date_gap", "1982 re-release", None)
-    assert out["goldenlake"]["is_rerelease"] is False  # carried over from late 1981
-
-
-def test_same_title_later_but_not_remakes_with_a_year():
+def test_same_title_alone_is_not_a_rerelease():
     out = detect(
         rel("puppet", "Puppet", date(1984, 3, 4)),
         rel("puppet88", "Puppet", date(1988, 6, 5)),
-        rel("puppet14", "Puppet (2014)", date(2014, 12, 21)),
-        rel("quick", "Quick", date(1990, 1, 7)),
-        rel("quick2", "Quick", date(1990, 9, 2)),  # under two years: not flagged
+        rel("heat", "Heat", date(1995, 12, 17)),
+        rel("theheat", "The Heat", date(2013, 6, 30)),
     )
-    assert out["puppet88"]["rerelease_reason"] == "same_title_later"
-    assert out["puppet88"]["parent_movie_id"] == "puppet"
-    assert out["puppet14"]["is_rerelease"] is False
-    assert out["quick2"]["is_rerelease"] is False
+    assert not any(r["is_rerelease"] for r in out.values())
 
 
 def test_title_ids_group_rereleases_under_the_root():
@@ -344,21 +354,44 @@ def test_title_ids_group_rereleases_under_the_root():
     assert tid == {"moonllama": "bb_moonllama", "moonllamase": "bb_moonllama",
                    "moonllama3d": "bb_moonllama", "robotpicnic": "bb_robotpicnic"}
     parent = dict(zip(ing.releases["source_key"], ing.releases["parent_release_id"]))
-    assert parent["moonllama3d"] in {"legacy:moonllama", "legacy:moonllamase"}
+    assert parent["moonllama3d"] == "legacy:moonllama"
     assert set(ing.snapshots.filter(pl.col("release_id").str.starts_with("legacy:moonllama"))["title_id"]) == {"bb_moonllama"}
     assert ing.report["rereleases"] == {"title_keyword": 1, "format_rerelease": 1}
 
 
+def _group(source_key, title_id, label=None):
+    return {"source_key": source_key, "title_id": title_id, "release_label": label,
+            "source": "x", "source_url": None, "notes": None}
+
+
 def test_manual_title_groups_win():
-    groups = [{"source_key": "robotpicnic", "title_id": "tt0000001", "release_label": "Director's Cut",
-               "source": "x", "source_url": None, "notes": None},
-              {"source_key": "rl123", "title_id": "tt0000002", "release_label": None,
-               "source": "x", "source_url": None, "notes": None}]
+    groups = [_group("robotpicnic", "tt0000001", "Director's Cut"), _group("rl123", "tt0000002")]
     ing = normalize(frame(), groups)
     r = ing.releases.row(by_predicate=pl.col("source_key") == "robotpicnic", named=True)
     assert (r["title_id"], r["label"], r["group_source"]) == ("tt0000001", "Director's Cut", "manual")
+    assert (r["is_rerelease"], r["rerelease_reason"]) == (True, "manual")
     assert ing.report["manual_groups_applied"] == 1
     assert set(ing.snapshots.filter(pl.col("release_id") == "legacy:robotpicnic")["title_id"]) == {"tt0000001"}
+
+
+def test_manual_group_without_label_makes_a_standalone_film():
+    rows = [
+        (1994, 25, date(1994, 6, 19), 1, "moonllama", "Moon Llama", 9, 1, 9, 1, date(1994, 6, 17)),
+        (2011, 15, date(2011, 4, 10), 1, "moonllamaimax", "Moon Llama (IMAX)", 9, 1, 9, 1, date(2011, 4, 8)),
+    ]
+    assert normalize(frame(rows)).releases["title_id"].to_list() == ["bb_moonllama", "bb_moonllama"]
+    ing = normalize(frame(rows), [_group("moonllamaimax", "tt0000003")])
+    r = ing.releases.row(by_predicate=pl.col("source_key") == "moonllamaimax", named=True)
+    assert (r["title_id"], r["is_rerelease"], r["label"], r["parent_release_id"]) == ("tt0000003", False, None, None)
+
+
+def test_rereleases_follow_a_manually_regrouped_parent():
+    rows = [
+        (1994, 25, date(1994, 6, 19), 1, "moonllama", "Moon Llama", 9, 1, 9, 1, date(1994, 6, 17)),
+        (2011, 37, date(2011, 9, 18), 1, "moonllama3d", "Moon Llama 3D", 9, 1, 9, 1, date(2011, 9, 16)),
+    ]
+    ing = normalize(frame(rows), [_group("moonllama", "tt0000004")])
+    assert ing.releases["title_id"].to_list() == ["tt0000004", "tt0000004"]
 
 
 def test_provisional_title_ids_are_unique_and_valid():
