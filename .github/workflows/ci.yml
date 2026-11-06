@@ -1,0 +1,52 @@
+# Pull-request CI: tests and data checks. No network fetching happens here
+# (BOFFO_FETCH is unset, so the ETL stays offline).
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  test:
+    name: Tests and checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Guard against committed data
+        run: make guard
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: etl/uv.lock
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: make setup
+
+      - name: pytest + vitest
+        run: make test
+
+      - name: Data checks (checks.py)
+        run: make check
+
+      - name: Site builds
+        run: make site-build

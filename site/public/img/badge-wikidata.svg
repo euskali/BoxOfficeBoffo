@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="31" viewBox="0 0 88 31" shape-rendering="crispEdges">
+  <rect width="88" height="31" fill="#006633"/>
+  <path d="M0 0H88V1H1V30H0Z" fill="#66CC99"/>
+  <path d="M88 31H0V30H87V1H88Z" fill="#003319"/>
+  <rect x="3" y="3" width="4" height="25" fill="#FF8080"/>
+  <rect x="8" y="3" width="3" height="25" fill="#FFFFFF"/>
+  <rect x="12" y="3" width="4" height="25" fill="#66CCFF"/>
+  <g font-family="Verdana, Tahoma, Geneva, sans-serif" fill="#FFFFFF" text-anchor="middle" shape-rendering="auto">
+    <text x="53" y="13" font-size="8">Data:</text>
+    <text x="53" y="24" font-size="11" font-weight="bold">Wikidata</text>
+  </g>
+</svg>

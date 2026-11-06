@@ -7,8 +7,9 @@
 Inspired by the Blank Check with Griffin & David crowd who miss the old Mojo charts.
 
 **Ground rules**
-- Hobby, no revenue. That makes the free non-commercial sources (IMDb datasets, TMDB) usable. See `docs/DATA_SOURCES.md`.
+- Hobby, no revenue, public repo. Only sources whose terms allow a public site: archives, Wikidata (CC0), and public-domain BLS data. The IMDb datasets are out because their terms forbid republishing them as a database. See `docs/DATA_SOURCES.md` and `DATA_NOTICE.md`.
 - Static site: there's no server to pay for or maintain. Data ships as Parquet files and is queried in the browser with DuckDB-WASM.
+- Data is fetched and built in GitHub Actions, never committed, and published only with the site.
 - Every number carries its source and quality flag (actual / estimate / rental / baseline).
 
 ---
@@ -19,17 +20,17 @@ Inspired by the Blank Check with Griffin & David crowd who miss the old Mojo cha
 ## Phase 1 — MVP: Domestic time machine, 1982 → present
 Detailed task list: `docs/MVP_PLAN.md`.
 - Weekend-chart snapshots 1982–2016 from an existing scraped dataset (Purdue stat695data, MIT).
-- 2017 → present weekend charts (Wayback Machine snapshots first, polite live fetch as fallback).
+- 2017 → present weekend charts from archived Box Office Mojo pages only (Wayback Machine first, Common Crawl as fallback). Box Office Mojo is never fetched live.
 - Pre-1982 baseline: hand-curated lifetime grosses for the biggest older films, so all-time lists as of 1985 still include Star Wars, Jaws, etc.
-- Film identity linked to IMDb IDs, with re-releases grouped under one title.
-- Credits from the IMDb non-commercial datasets → director and actor rollups.
+- Film identity via Wikidata (legacy Mojo IDs P1237, IMDb IDs P345), with re-releases grouped under one title.
+- Credits from Wikidata (CC0) → director and actor rollups.
 - Three measures: nominal $, CPI-adjusted $, and estimated admissions (ticket-price-adjusted, old-Mojo style).
 - Static site: film page with a rank-over-time chart and a date picker, an all-time leaderboard as of any date, person pages, and a weekend chart for any weekend.
 - Look and feel: late-90s movie fan site (old GameFAQs / eeggs / Movie Mistakes era) built with Tailwind v4. Dense tables, navy header bars, Verdana, square corners, but fast, responsive and accessible. See `docs/DESIGN.md`.
-- Deployed to GitHub Pages.
+- Built and deployed to GitHub Pages by GitHub Actions.
 
 ## Phase 2 — Keep it current
-- Weekly GitHub Action (Monday) pulls the latest weekend, rebuilds Parquet, redeploys.
+- Weekly scheduled run of the deploy workflow (Monday) picks up the latest archived weekend, rebuilds Parquet, and redeploys.
 - Data-quality dashboard: unmatched titles, gaps in weekends, totals that went backward.
 - Manual override files reviewed through PRs.
 
@@ -40,7 +41,7 @@ Detailed task list: `docs/MVP_PLAN.md`.
 - Variety National Boxoffice Survey #1s (pre-1982) as "weekly #1" history.
 
 ## Phase 4 — Worldwide and finer grain
-- Lifetime worldwide totals (TMDB, cross-checked) as a separate, clearly approximate list.
+- Lifetime worldwide totals (TMDB if its terms allow a public site; cross-checked) as a separate, clearly approximate list.
 - International timelines where data exists (mostly 2000s+).
 - Daily granularity for the modern era (opening day, fastest to $X records as of a date).
 

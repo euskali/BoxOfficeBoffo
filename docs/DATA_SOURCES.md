@@ -1,29 +1,46 @@
 # Data Sources
 
-Status key: ✅ use in MVP · 🔜 later phase · 📚 reference/manual · ⚠️ terms restrict use
+Status key: ✅ use in MVP · 🔜 later phase · 📚 reference/manual · ⛔ not used (terms)
 
-BoxOfficeBoffo is a **non-commercial hobby project**. Several sources below are free *only* for non-commercial use. If that ever changes, revisit this file first.
+BoxOfficeBoffo is a **non-commercial hobby project** with a **public repo**. The repo holds code, docs, and cited manual CSVs only. Everything fetched or derived is built in CI and published only in the GitHub Pages artifact. If any of that changes, revisit this file and `DATA_NOTICE.md` first.
 
 ## Core (MVP)
 
 | Source | What | Coverage | Terms | Status |
 |---|---|---|---|---|
-| **Purdue `stat695data` (`mojo.rda`)**, github.com/schloerke/stat695data | Box Office Mojo weekend charts scraped Mar 2017: rank, weekend gross, theaters, **cumulative total gross**, release date, genre, MPAA, legacy Mojo id | 1982–2016, 116,663 rows, 13,499 releases | MIT (package); underlying facts from Mojo | ✅ |
-| **Wayback Machine** (CDX API) | Archived Box Office Mojo weekend chart pages (new-style URLs `/weekend/YYYYWnn/`) | 2019 redesign → present, plus old-style pages before that | Archive.org terms; be polite | ✅ |
-| **Box Office Mojo** (live) | Weekend charts, release pages with IMDb `tt` links | 1982 → present | IMDb terms prohibit scraping. Opt-in fallback only: cached, rate-limited | ⚠️ |
-| **IMDb non-commercial datasets**, datasets.imdbws.com | `title.basics`, `title.crew`, `title.principals`, `name.basics` | All titles and people | Personal / non-commercial use | ✅ |
-| **FRED `CPIAUCSL`** (BLS CPI-U) | Monthly CPI | 1947 → present (BLS annual back to 1913) | Public domain | ✅ |
-| **Average ticket price history** | Annual US avg ticket price | 1910 → present | Facts; cite NATO / Mojo table used | ✅ (manual CSV) |
+| **Purdue `stat695data` (`mojo.rda`)**, github.com/schloerke/stat695data | Box Office Mojo weekend charts scraped Mar 23, 2017: rank, weekend gross, theaters, **cumulative total gross**, release date, genre, MPAA, legacy Mojo id (21 columns) | 1982–2016, 116,663 rows, 13,499 releases | MIT covers the R package code. The figures themselves were scraped from Box Office Mojo | ✅ |
+| **Wayback Machine** (CDX API) | Archived Box Office Mojo weekend chart pages (`/weekend/YYYYWnn/`, plus old-style chart URLs) and release pages (for IMDb `tt` ids) | 2017 → present | Internet Archive terms. No published rate limit; ~15 req/min is the unofficial ceiling, and we stay at ≤12/min | ✅ |
+| **Common Crawl** (index.commoncrawl.org + WARC byte ranges) | The same Box Office Mojo pages, as a fallback for weekends Wayback lacks | ~2013 → present | Common Crawl terms: crawled content "may be subject to separate terms" of its owners. Don't overload the index server | ✅ |
+| **Wikidata** (CC0) | Films, English labels, IMDb ID (P345), legacy Box Office Mojo film ID (P1237), directors (P57), cast (P161, with the P1545 ordinal when present), publication date (P577), genre (P136), duration (P2047) | ~14.3k films carry P1237, nearly all with P345 too (Nov 2026) | CC0, no attribution required (we credit anyway). WDQS: 60 s timeout, 5 parallel queries per IP, informative User-Agent required | ✅ |
+| **BLS CPI-U** (`CUUR0000SA0`) | Monthly CPI, U.S. city average, not seasonally adjusted | 1913 → present | Public domain; cite BLS | ✅ |
+| **Average ticket price history** | Annual US average ticket price | 1910s → present, with gaps | Facts with citations, in a manual CSV (candidate sources below) | ✅ (manual CSV) |
 
-## Helpful extras
+## Not used, and why
+
+| Source | Why not | Status |
+|---|---|---|
+| **Box Office Mojo (live site)** | IMDb's Conditions of Use ban "data mining, robots, screen scraping", and Box Office Mojo is an IMDb company. `fetch.py` blocks `boxofficemojo.com` | ⛔ |
+| **IMDb non-commercial datasets** | The data "must not be altered/republished/resold/repurposed to create any kind of online/offline database of movie information", which is what a public site does. Blocked in `fetch.py`. IMDb IDs come from Wikidata P345 instead | ⛔ |
+| **FRED** (CPIAUCSL) | FRED's terms bar scraping, extraction, and caching of FRED content, and its API needs a key. We use the same BLS data from BLS directly | ⛔ |
+| **The Numbers / OpusData** | Licensed. The site reserves scraping and redistribution, "commercial or otherwise", to licensees. Blocked in `fetch.py` | ⛔ |
+| **IMDb + Box Office Mojo on AWS Data Exchange** | Enterprise contract | ⛔ |
+| **Rentrak** (formerly Comscore Movies; sold to Advaya Capital in May 2026) | Industry source of truth, studio-only | ⛔ |
+
+## Ticket price candidate sources (for `data/manual/ticket_prices.csv`)
+Cite each row to one of these, with the table and page. Don't transcribe Box Office Mojo's own table; go to its primary sources.
+- **Cinema United** (formerly NATO): the old `natoonline.org/data/ticket-price/` page now redirects to cinemaunited.org and 404s (Nov 2026). Find the current page or report, and cite the archived copy of the old table.
+- **Historical Statistics of the United States, Millennial Edition**, Table Dh388–391, "Motion picture attendance, box office receipts, and admission prices: 1922–1998" (Cambridge University Press).
+- **Period trade sources on Lantern** (lantern.mediahist.org), e.g. *Evidence Study No. 25 of the Motion Picture Industry* (1935) for 1929–1934, and *Film Daily Year Book* volumes.
+- Known gaps: the 1910s and the 1960s–80s still need sources. Leave them out of the CSV and let the build interpolate (flagged) until they're found.
+
+## Helpful extras (check terms before using any)
 
 | Source | What | Notes | Status |
 |---|---|---|---|
-| **heike/classdata `mojo`** (R pkg, GitHub) | Mojo weekend charts scraped Sep 2018 | 2013–2018, about 31.7k rows. Use to cross-check or fill 2017–2018 | 🔜 |
-| **Common Crawl** (index.commoncrawl.org) | Raw HTML of crawled pages, including boxofficemojo.com | Good coverage ~2013→present. Includes **pre-Oct-2019 Mojo pages** (people charts, inflation-adjusted charts) that are gone from the live site. Free, no key | 🔜 |
-| **Wayback Machine, old Mojo** | `boxofficemojo.com/people/…`, `/alltime/adjusted.htm`, `/movies/?id=…` | Validate person rollups and adjusted rankings against what Mojo showed | 🔜 |
-| **R `boxoffice` package** (CRAN) | Daily scraper for Mojo / The Numbers | A daily-granularity reference implementation for Phase 4 | 🔜 |
-| **TMDB API** | Lifetime worldwide revenue, budget, posters | Free non-commercial with attribution; 6-month cache limit | 🔜 |
+| **heike/classdata `mojo`** (R pkg, GitHub) | Mojo weekend charts scraped Sep 2018 | 2013–2018, about 31.7k rows. Could cross-check 2017–2018. Check its license first | 🔜 |
+| **Wayback Machine, old Mojo** | `boxofficemojo.com/people/…`, `/alltime/adjusted.htm`, `/movies/?id=…` (archived) | Validate person rollups and adjusted rankings against what Mojo showed | 🔜 |
+| **R `boxoffice` package** (CRAN) | Daily scraper for Mojo / The Numbers | Reference implementation only. Its live-scraping approach is not allowed here | 📚 |
+| **TMDB API** | Lifetime worldwide revenue, budget, posters | Free non-commercial with attribution; 6-month cache limit. Re-check the terms for a public site | 🔜 |
 | **Wikidata** (P2142 box office) | Lifetime grosses with qualifiers | CC0, inconsistent coverage | 🔜 |
 | **Wikipedia "box office number-one films in the US" lists** | Weekly #1 film, 1948→present (pre-1982 = Variety National Boxoffice Survey) | CC BY-SA text; facts free. Great for pre-1982 #1 history | 🔜 |
 
@@ -38,13 +55,9 @@ BoxOfficeBoffo is a **non-commercial hobby project**. Several sources below are 
 
 **Big caveat for old data:** until the 1970s–80s, trades reported **distributor rentals**, not box office grosses. Store them with `is_rental=true` and never mix them silently with grosses.
 
-## Commercial (not used; for reference)
-- **OpusData / The Numbers**: licensed API. The site's terms reserve scraping and redistribution, "commercial or otherwise", to licensees.
-- **IMDb + Box Office Mojo on AWS Data Exchange**: enterprise contract.
-- **Rentrak** (formerly Comscore Movies; sold to Advaya Capital in May 2026): industry source of truth, studio-only.
-
 ## Etiquette for anything fetched
-- Cache everything in `data/raw/` and never re-fetch what's cached.
-- At least 5 s between live requests, and a User-Agent that names the project and repo URL.
-- Prefer archives (Wayback, Common Crawl) over hitting live sites.
-- Credit sources on the About page and in the footer.
+- Fetch **only in CI** (`BOFFO_FETCH=1` in the `data-build` job). Locally the ETL is offline.
+- Cache everything in `data/raw/` (persisted with `actions/cache`) and never re-fetch what's cached.
+- At least 5 s between requests to one host, and a User-Agent that names the project and repo URL. Back off on 429/503 and honor `Retry-After`.
+- Archives only for Box Office Mojo pages. Never the live site.
+- Credit sources on the About page, in the footer, and in `DATA_NOTICE.md`.

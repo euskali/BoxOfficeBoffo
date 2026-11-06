@@ -44,7 +44,7 @@ Dark mode is optional but fun: navy background, light text, cyan links, like a l
 - **Footer:** "Last updated: Mon Nov 9 2026", a static joke hit counter, a "Best viewed in any browser" badge, a source credits line, and a link to the GitHub repo.
 
 ## Signature details (use sparingly; charm, not clutter)
-- 88×31 badge buttons in the footer, all made for this site ("Powered by DuckDB", "Made w/ Notepad", "Data: IMDb non-commercial").
+- 88×31 badge buttons in the footer, all made for this site ("Powered by DuckDB", "Made w/ Notepad", "Data: Wikidata").
 - `NEW!` badge on newly released films in weekend charts.
 - Beveled `[ Go ]` buttons with outset borders that turn inset on press.
 - A `<hr>` styled as a 3D groove.

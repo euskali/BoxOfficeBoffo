@@ -1,0 +1,176 @@
+@import 'tailwindcss';
+
+/* Design tokens: docs/DESIGN.md. Light values here, dark overrides below. */
+@theme static {
+  --color-page: #ffffff;
+  --color-ink: #000000;
+  --color-muted: #555555;
+  --color-link: #0000cc;
+  --color-visited: #551a8b;
+  --color-bar: #003366;
+  --color-bar-alt: #336699;
+  --color-bar-ink: #ffffff;
+  --color-row: #ffffff;
+  --color-row-alt: #eeeeee;
+  --color-hl: #ffffcc;
+  --color-new: #cc0000;
+  --color-new-ink: #ffffff;
+  --color-down: #006600;
+  --color-edge: #999999;
+  --color-face: #d4d0c8;
+
+  --font-body: Verdana, Tahoma, Geneva, sans-serif;
+  --font-mono: 'Courier New', Courier, monospace;
+
+  --text-body: 13px;
+  --text-small: 11px;
+
+  --radius-*: initial;
+  --radius: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-page: #000033;
+    --color-ink: #e6e6e6;
+    --color-muted: #aaaaaa;
+    --color-link: #66ffff;
+    /* #551a8b fails AA on navy; this one is 11:1 on the page and 5.2:1 on the highlight row. */
+    --color-visited: #e0b0ff;
+    --color-row: #000033;
+    --color-row-alt: #12124a;
+    --color-hl: #4a4a00;
+    --color-new: #ff8080;
+    --color-new-ink: #000000;
+    --color-down: #66ff66;
+    --color-face: #2a2a66;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-page);
+    color-scheme: light dark;
+  }
+  body {
+    margin: 0;
+    background: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.45;
+    overflow-x: hidden;
+  }
+  *,
+  *::before,
+  *::after {
+    border-radius: 0;
+  }
+  a {
+    color: var(--color-link);
+    text-decoration: underline;
+  }
+  a:visited {
+    color: var(--color-visited);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--color-page);
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 12px 0 8px;
+  }
+  p {
+    margin: 0 0 10px;
+  }
+  hr {
+    border: 0;
+    height: 0;
+    border-top: 2px groove var(--color-edge);
+    margin: 14px 0;
+  }
+  input[type='text'] {
+    font: inherit;
+    color: var(--color-ink);
+    background: var(--color-page);
+    border: 2px inset var(--color-edge);
+    padding: 2px 4px;
+    min-width: 0;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Beveled Win98-style button: outset, inset while pressed. */
+  .btn-bevel {
+    font: inherit;
+    font-weight: bold;
+    color: var(--color-ink);
+    background: var(--color-face);
+    border: 2px outset var(--color-edge);
+    padding: 1px 10px;
+    cursor: pointer;
+  }
+  .btn-bevel:active {
+    border-style: inset;
+    padding: 2px 9px 0 11px;
+  }
+  /* Navy header bars: section headers and sidebar boxes. */
+  .bar {
+    background: var(--color-bar);
+    color: var(--color-bar-ink);
+    font-weight: bold;
+    font-variant: small-caps;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+  }
+  .box {
+    border: 1px solid var(--color-edge);
+    background: var(--color-page);
+  }
+  .grid-table th,
+  .grid-table td {
+    border: 1px solid var(--color-edge);
+    padding: 2px 6px;
+    text-align: left;
+  }
+  .grid-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bar-alt);
+    color: var(--color-bar-ink);
+    z-index: 1;
+  }
+  .grid-table tbody tr:nth-child(odd) {
+    background: var(--color-row);
+  }
+  .grid-table tbody tr:nth-child(even) {
+    background: var(--color-row-alt);
+  }
+  .grid-table tbody th {
+    font-weight: bold;
+  }
+  .grid-table caption {
+    font-weight: bold;
+    text-align: left;
+    padding: 4px 0;
+  }
+}
+
+@layer utilities {
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,12 +1,26 @@
-# data
+# data: raw downloads, intermediate builds, and shipped Parquet are never committed.
+# They are built in CI and published only in the GitHub Pages artifact (see DATA_NOTICE.md).
 data/raw/
 data/build/
+site/public/data/
+*.parquet
+*.rda
+*.rds
+*.RData
+*.duckdb
+*.duckdb.wal
+*.arrow
+*.feather
+*.warc
+*.warc.gz
 
 # python
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.ruff_cache/
+*.egg-info/
 
 # node
 node_modules/

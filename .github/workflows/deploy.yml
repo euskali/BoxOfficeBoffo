@@ -1,0 +1,111 @@
+# Push to main: build the data in CI (the only place network fetching runs),
+# then build the site and deploy it to GitHub Pages. Built Parquet is never
+# committed; it ships only inside the Pages artifact.
+name: Build data and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  data-build:
+    name: Build data and site
+    runs-on: ubuntu-latest
+    # The first run fetches every archived page politely (>=5 s apart); later runs hit the cache.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Guard against committed data
+        run: make guard
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: etl/uv.lock
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: make setup
+
+      # Raw downloads (Wayback/Common Crawl captures, Wikidata results, CPI, stat695data)
+      # live in the Actions cache, never in git. The primary key never matches, so the
+      # newest cache is restored via the prefix.
+      - name: Restore raw download cache
+        id: raw-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: data/raw
+          key: raw-v1-${{ github.run_id }}
+          restore-keys: raw-v1-
+
+      - name: Build data (fetches only what is not cached)
+        env:
+          BOFFO_FETCH: "1"
+        run: make etl
+
+      # Save the cache even if the build failed, so a long first fetch is not lost.
+      # The key is a fingerprint of the file list, so unchanged caches are not re-saved.
+      - name: Fingerprint raw cache
+        id: raw-fp
+        if: always()
+        run: |
+          mkdir -p data/raw
+          fp=$(find data/raw -type f -printf '%P %s\n' | sort | sha256sum | cut -c1-16)
+          echo "key=raw-v1-$fp" >> "$GITHUB_OUTPUT"
+
+      - name: Save raw download cache
+        if: always() && steps.raw-fp.outputs.key != steps.raw-restore.outputs.cache-matched-key
+        uses: actions/cache/save@v6
+        with:
+          path: data/raw
+          key: ${{ steps.raw-fp.outputs.key }}
+
+      - name: pytest + vitest (data-dependent tests run here)
+        run: make test
+
+      - name: Data checks (checks.py)
+        run: make check
+
+      - name: Build site
+        env:
+          # Project site: /<repo>/. Set the SITE_BASE_PATH repo variable to "/" for a custom domain.
+          BASE_PATH: ${{ vars.SITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
+        run: make site-build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: data-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
