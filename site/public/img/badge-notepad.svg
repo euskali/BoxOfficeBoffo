@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="31" viewBox="0 0 88 31" shape-rendering="crispEdges">
+  <rect width="88" height="31" fill="#C0C0C0"/>
+  <path d="M0 0H88V1H1V30H0Z" fill="#FFFFFF"/>
+  <path d="M88 31H0V30H87V1H88Z" fill="#404040"/>
+  <rect x="3" y="3" width="82" height="7" fill="#000080"/>
+  <rect x="76" y="4" width="8" height="5" fill="#C0C0C0"/>
+  <rect x="3" y="11" width="82" height="17" fill="#FFFFFF"/>
+  <g font-family="Verdana, Tahoma, Geneva, sans-serif" shape-rendering="auto" text-anchor="middle">
+    <text x="30" y="9" font-size="6" font-weight="bold" fill="#FFFFFF">Untitled</text>
+    <text x="44" y="23" font-size="8" font-weight="bold" fill="#000000" textLength="76" lengthAdjust="spacingAndGlyphs">Made w/ Notepad</text>
+  </g>
+</svg>

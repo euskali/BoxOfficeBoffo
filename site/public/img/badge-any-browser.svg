@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="31" viewBox="0 0 88 31" shape-rendering="crispEdges">
+  <rect width="88" height="31" fill="#003366"/>
+  <path d="M0 0H88V1H1V30H0Z" fill="#6699CC"/>
+  <path d="M88 31H0V30H87V1H88Z" fill="#001A33"/>
+  <rect x="3" y="3" width="82" height="2" fill="#FFFFFF"/>
+  <rect x="3" y="26" width="82" height="2" fill="#FFFFFF"/>
+  <g font-family="Verdana, Tahoma, Geneva, sans-serif" fill="#FFFFFF" text-anchor="middle" shape-rendering="auto">
+    <text x="44" y="13" font-size="8">Best viewed in</text>
+    <text x="44" y="23" font-size="9" font-weight="bold">ANY BROWSER</text>
+  </g>
+</svg>

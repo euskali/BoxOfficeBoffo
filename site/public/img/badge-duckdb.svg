@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="31" viewBox="0 0 88 31" shape-rendering="crispEdges">
+  <rect width="88" height="31" fill="#FFD400"/>
+  <path d="M0 0H88V1H1V30H0Z" fill="#FFF7A8"/>
+  <path d="M88 31H0V30H87V1H88Z" fill="#8A6F00"/>
+  <rect x="2" y="2" width="84" height="27" fill="none" stroke="#000000" stroke-width="1"/>
+  <g font-family="Verdana, Tahoma, Geneva, sans-serif" fill="#000000" text-anchor="middle" shape-rendering="auto">
+    <text x="44" y="12" font-size="8">Powered by</text>
+    <text x="44" y="24" font-size="12" font-weight="bold">DuckDB</text>
+  </g>
+</svg>
