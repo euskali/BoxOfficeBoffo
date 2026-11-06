@@ -235,3 +235,94 @@ def test_404_raises_without_caching(repo, fetch_on):
     assert len(rec.requests) == 1
     raw = repo / "data" / "raw"
     assert not raw.exists() or not [p for p in raw.rglob("*") if p.is_file()]
+
+
+# --- range requests, accepted statuses, validation (M2) ---------------------
+
+CC_WARC = "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/x/warc/y.warc.gz"
+
+
+def ranged(request):
+    rng = request.headers.get("Range", "")
+    assert rng.startswith("bytes=")
+    a, b = (int(x) for x in rng[6:].split("-"))
+    body = bytes(range(256)) * 4
+    return httpx.Response(206, content=body[a:b + 1],
+                          headers={"Content-Range": f"bytes {a}-{b}/{len(body)}"})
+
+
+def test_fetch_range_sends_range_and_caches_by_range(repo, fetch_on):
+    f, rec, _ = make(ranged, min_interval=0)
+    p = f.fetch_range(CC_WARC, 10, 5)
+    assert p.read_bytes() == bytes([10, 11, 12, 13, 14])
+    assert rec.requests[0].headers["Range"] == "bytes=10-14"
+    assert f.is_cached(CC_WARC, byte_range=(10, 5))
+    assert not f.is_cached(CC_WARC, byte_range=(10, 6))
+    assert not f.is_cached(CC_WARC)
+    f.fetch_range(CC_WARC, 10, 5)
+    assert len(rec.requests) == 1  # second call is a cache hit
+    f.fetch_range(CC_WARC, 20, 3)
+    assert len(rec.requests) == 2  # another range is another entry
+    meta = json.loads(p.with_name(p.name + ".meta.json").read_text())
+    assert meta["range"] == [10, 14] and meta["status"] == 206
+
+
+def test_fetch_range_refuses_a_whole_file_answer(repo, fetch_on):
+    f, _, _ = make(lambda r: httpx.Response(200, content=b"x" * 5000), min_interval=0)
+    with pytest.raises(FetchError, match="HTTP 200"):
+        f.fetch_range(CC_WARC, 0, 10)
+    assert not f.is_cached(CC_WARC, byte_range=(0, 10))
+
+
+def test_fetch_range_checks_content_range(repo, fetch_on):
+    f, _, _ = make(lambda r: httpx.Response(206, content=b"abcde", headers={"Content-Range": "bytes 0-4/99"}),
+                   min_interval=0)
+    with pytest.raises(FetchError, match="Content-Range|answered"):
+        f.fetch_range(CC_WARC, 10, 5)
+
+
+def test_fetch_range_offline_raises(repo):
+    f, rec, _ = make(ranged)
+    with pytest.raises(FetchDisabledError):
+        f.fetch_range(CC_WARC, 0, 4)
+    assert rec.requests == []
+
+
+def test_fetch_range_policy_applies(fetch_on):
+    f, _, _ = make(ranged)
+    with pytest.raises(BlockedHostError):
+        f.fetch_range("https://www.boxofficemojo.com/weekend/2020W01/", 0, 4)
+
+
+def test_accept_status_caches_a_404_body(repo, fetch_on):
+    url = "https://index.commoncrawl.org/CC-MAIN-2024-10-index?url=x&output=json"
+    f, rec, _ = make(lambda r: httpx.Response(404, content=b'{"message": "No Captures found"}'), min_interval=0)
+    p = f.fetch(url, accept_status=(200, 404))
+    assert b"No Captures" in p.read_bytes()
+    assert json.loads(p.with_name(p.name + ".meta.json").read_text())["status"] == 404
+    f.fetch(url, accept_status=(200, 404))
+    assert len(rec.requests) == 1
+
+
+def test_validate_refusal_is_not_cached(repo, fetch_on):
+    def must_be_json(body):
+        json.loads(body)
+
+    f, rec, _ = make(ok, min_interval=0)
+    with pytest.raises(FetchError, match="unusable body"):
+        f.fetch("https://web.archive.org/cdx/search/cdx?url=x", validate=must_be_json)
+    assert not f.is_cached("https://web.archive.org/cdx/search/cdx?url=x")
+
+
+def test_network_requests_counts_only_real_requests(repo, fetch_on):
+    f, _, _ = make(ok, min_interval=0)
+    f.fetch("https://web.archive.org/a")
+    f.fetch("https://web.archive.org/a")
+    assert f.network_requests == 1
+
+
+def test_retry_delays_back_off(fetch_on):
+    f, _, sleeps = make(lambda r: httpx.Response(503), min_interval=0)
+    with pytest.raises(FetchError, match="4 attempts"):
+        f.fetch("https://web.archive.org/down")
+    assert sleeps == [10.0, 30.0, 90.0]

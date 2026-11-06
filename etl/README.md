@@ -31,6 +31,13 @@ rate-limited per host, restricted to an allowlist (Wayback, Common Crawl,
 Wikidata, BLS, GitHub). Live fetching from boxofficemojo.com, imdb.com,
 the-numbers.com and related hosts is permanently blocked.
 
+The M2 step (`sources/bom_weekend.py`) fetches about a thousand archived pages
+on its first run. It stops starting new fetches after `BOFFO_FETCH_MINUTES`
+(default 270) and makes at most `BOFFO_RELEASE_PAGES` (default 150) new
+release-page lookups per run, within `BOFFO_RELEASE_PAGE_MINUTES` (default 45).
+Weekends it didn't reach are marked `pending`, `checks.py` fails on them, and
+the next run continues from the cache.
+
 Scraped or derived data is never committed: `data/raw/`, `data/build/` and
 `site/public/data/` are gitignored. `data/manual/*.csv` are hand-curated, and
 every row needs a real source.

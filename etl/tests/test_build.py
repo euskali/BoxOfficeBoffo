@@ -25,7 +25,8 @@ def test_build_creates_dirs_and_manifest(repo, capsys):
     out = capsys.readouterr().out
     assert "disabled" in out
     assert "step stat695: skipped, its raw input is not cached" in out
-    assert "not implemented until M2" in out
+    assert "step bom_weekend: skipped, its raw input is not cached" in out
+    assert "not implemented until M3/M4" in out
 
 
 def test_build_fails_when_data_is_required(repo, monkeypatch, capsys):
@@ -70,3 +71,31 @@ def test_full_build_from_cached_rda(repo, monkeypatch, capsys):
     assert tables["snapshots"]["rows"] == 4 and len(tables["snapshots"]["sha256"]) == 64
     for f in ("stat695_snapshots.parquet", "stat695_releases.parquet", "stat695_report.json", "stat695_rereleases.csv"):
         assert (repo / "data/build" / f).is_file()
+
+
+def test_assemble_releases_recounts_stitched_releases():
+    from datetime import date
+
+    blank = {k: None for k in stat695.RELEASE_SCHEMA}
+    rel = pl.DataFrame([{**blank, **r} for r in [
+        {"release_id": "legacy:a", "source": "stat695", "source_key": "a", "first_weekend": date(2016, 12, 4),
+         "last_weekend": date(2017, 1, 1), "weekends": 5},
+        {"release_id": "bom:rl9", "source": "bom_weekend", "source_key": "rl9", "first_weekend": date(2017, 1, 8),
+         "last_weekend": date(2017, 1, 8), "weekends": 1},
+        {"release_id": "legacy:gone", "source": "stat695", "source_key": "gone", "first_weekend": date(2001, 1, 7),
+         "last_weekend": date(2001, 1, 7), "weekends": 1},
+        {"release_id": "legacy:fresh2017", "source": "bom_weekend", "source_key": "fresh2017",
+         "first_weekend": date(2017, 1, 29), "last_weekend": date(2017, 1, 29), "weekends": 1},
+    ]], schema=stat695.RELEASE_SCHEMA)
+    snaps = pl.DataFrame({
+        "release_id": ["legacy:a"] * 3 + ["bom:rl9"],
+        "weekend_end": [date(2016, 12, 4), date(2017, 1, 1), date(2017, 1, 15), date(2017, 1, 8)],
+    })
+    links = pl.DataFrame({"release_id": ["legacy:a"], "bom_release_id": ["rl1"]})
+    out = {r["release_id"]: r for r in build.assemble_releases(rel, snaps, links).to_dicts()}
+    assert set(build.assemble_releases(rel, snaps, links).columns) == set(build.PUBLISHED_RELEASE_SCHEMA)
+    assert (out["legacy:a"]["bom_release_id"], out["legacy:a"]["last_weekend"], out["legacy:a"]["weekends"]) == (
+        "rl1", date(2017, 1, 15), 3)
+    assert out["bom:rl9"]["bom_release_id"] == "rl9"
+    assert out["legacy:gone"]["bom_release_id"] is None and out["legacy:gone"]["weekends"] == 1
+    assert out["legacy:fresh2017"]["bom_release_id"] is None  # an old-style page's legacy id isn't an rl id
