@@ -84,6 +84,8 @@ def test_assemble_releases_recounts_stitched_releases():
          "last_weekend": date(2017, 1, 8), "weekends": 1},
         {"release_id": "legacy:gone", "source": "stat695", "source_key": "gone", "first_weekend": date(2001, 1, 7),
          "last_weekend": date(2001, 1, 7), "weekends": 1},
+        {"release_id": "legacy:fresh2017", "source": "bom_weekend", "source_key": "fresh2017",
+         "first_weekend": date(2017, 1, 29), "last_weekend": date(2017, 1, 29), "weekends": 1},
     ]], schema=stat695.RELEASE_SCHEMA)
     snaps = pl.DataFrame({
         "release_id": ["legacy:a"] * 3 + ["bom:rl9"],
@@ -96,3 +98,4 @@ def test_assemble_releases_recounts_stitched_releases():
         "rl1", date(2017, 1, 15), 3)
     assert out["bom:rl9"]["bom_release_id"] == "rl9"
     assert out["legacy:gone"]["bom_release_id"] is None and out["legacy:gone"]["weekends"] == 1
+    assert out["legacy:fresh2017"]["bom_release_id"] is None  # an old-style page's legacy id isn't an rl id

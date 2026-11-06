@@ -54,7 +54,8 @@ def assemble_releases(releases: pl.DataFrame, snapshots: pl.DataFrame, links: pl
     A stat695 release that M2 stitched to an rl release keeps charting after
     2016, so its first/last weekend and weekend count come from every snapshot.
     """
-    own = pl.when(pl.col("source") == bom_weekend.SOURCE).then(pl.col("source_key"))
+    # Only new-site keys are rl ids; an old-style 2017-2019 page keys by legacy id.
+    own = pl.when((pl.col("source") == bom_weekend.SOURCE) & pl.col("source_key").str.starts_with("rl"))         .then(pl.col("source_key"))
     out = releases.with_columns(own.alias("bom_release_id"))
     if links is not None and links.height:
         out = out.join(links.select("release_id", pl.col("bom_release_id").alias("_linked")),
