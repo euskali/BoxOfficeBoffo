@@ -25,12 +25,12 @@ import csv
 import hashlib
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
 import polars as pl
-from rapidfuzz import fuzz
 
 from .. import paths
 from ..fetch import Fetcher, default_fetcher
@@ -53,11 +53,9 @@ USED_COLUMNS = (
 
 RELEASE_ID_PREFIX = "legacy:"
 
-# Re-release detection thresholds (see detect_rereleases).
+# Re-release detection (see detect_rereleases).
 FORMAT_MIN_GAP = timedelta(days=7 * 365)  # 3D/IMAX version of a film first charted 7+ years earlier
-SAME_TITLE_MIN_GAP = timedelta(days=2 * 365)  # same title charting again 2+ years later
-RELEASE_DATE_GAP = timedelta(days=365)  # first charted a year or more after its release date
-ID_SIMILARITY = 85  # rapidfuzz ratio between base titles for a legacy-id suffix match
+OWN_DATE_WINDOW = timedelta(days=365)  # a release_date this close before the first chart is the release's own
 
 EXAMPLES = 10  # examples kept per anomaly in the report
 FALLBACK_ENCODING = "WINDOWS-1252"  # for unmarked strings that fail to decode as UTF-8
@@ -163,50 +161,56 @@ REISSUE_RE = re.compile(
     r"remaster|\brestor(?:ed|ation)\b|extended (?:cut|edition)|final cut|collector'?s edition",
     re.I,
 )
-FORMAT_RE = re.compile(r"(?:in\s+)?(?:an\s+)?(?:imax\s*3-?d|imax|3-?d|digital 3-?d)(?:\s+experience)?", re.I)
+# Wording that also appears in new films' titles after a colon ("Urban Legends: Final Cut").
+WEAK_REISSUE_RE = re.compile(r"final cut|extended (?:cut|edition)", re.I)
+_FORMAT = r"(?:in\s+)?(?:disney\s+)?(?:digital\s+)?(?:imax\s*3-?d|imax|3-?d)"
+FORMAT_RE = re.compile(rf"(?:an\s+)?{_FORMAT}(?:\s+experience)?", re.I)
 PAREN_SUFFIX_RE = re.compile(r"^(?P<base>.*\S)\s*\((?P<suffix>[^()]+)\)\s*$")
-BARE_FORMAT_SUFFIX_RE = re.compile(r"^(?P<base>.*\S)\s+(?P<suffix>(?:in\s+)?(?:imax\s*3-?d|imax|3-?d))\s*$", re.I)
-SEP_SUFFIX_RE = re.compile(r"^(?P<base>.*\S)\s*(?::|\s-\s|\s\u2013\s)\s*(?P<suffix>[^:]+)$")
-ID_REISSUE_SUFFIX_RE = re.compile(r"(?:rerelease|reissue|re|se|specialedition|\d{1,2}th(?:anniversary)?|anniversary)$")
-ID_FORMAT_SUFFIX_RE = re.compile(r"(?:imax3d|imax|3d)$")
+BARE_FORMAT_SUFFIX_RE = re.compile(rf"^(?P<base>.*?\S)\s+(?P<suffix>{_FORMAT})\s*$", re.I)
+SEP_SUFFIX_RE = re.compile(r"^(?P<base>.*\S)\s*(?::|\s-\s|\s–\s)\s*(?P<suffix>[^:]+)$")
 YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 
 def split_title(title: str) -> tuple[str, str | None, str | None]:
     """Split a charted title into (base title, suffix label, suffix kind).
 
-    Kind is ``"reissue"`` for re-release wording (re-release, special edition,
-    anniversary...), ``"format"`` for 3D/IMAX versions, else None. Other
-    parentheticals, such as a remake's "(2014)", stay part of the base title.
+    Kind is ``"reissue"`` for re-release wording (re-issue, special edition,
+    anniversary...), ``"weak_reissue"`` for wording after a colon or dash that
+    new films also use ("Final Cut", "Extended Edition"), ``"format"`` for
+    3D/IMAX versions, else None. Other parentheticals, such as "(2014)", stay
+    part of the base title.
     """
     base = title.strip()
     labels: list[str] = []
-    kind: str | None = None
+    kinds: list[str] = []
     for _ in range(3):
-        suffix = None
+        suffix, this = None, None
         m = PAREN_SUFFIX_RE.match(base)
         if m and (REISSUE_RE.search(m["suffix"]) or FORMAT_RE.fullmatch(m["suffix"].strip())):
             suffix = m["suffix"]
+            this = "reissue" if REISSUE_RE.search(suffix) else "format"
         else:
             m = BARE_FORMAT_SUFFIX_RE.match(base)
             if m:
-                suffix = m["suffix"]
+                suffix, this = m["suffix"], "format"
             else:
                 m = SEP_SUFFIX_RE.match(base)
                 if m and REISSUE_RE.search(m["suffix"]):
                     suffix = m["suffix"]
+                    strong = REISSUE_RE.search(WEAK_REISSUE_RE.sub("", suffix))
+                    this = "reissue" if strong else "weak_reissue"
         if suffix is None:
             break
-        this = "reissue" if REISSUE_RE.search(suffix) else "format"
-        kind = "reissue" if "reissue" in (kind, this) else this
+        kinds.append(this)
         labels.insert(0, suffix.strip())
-        base = m["base"].rstrip(" :-\u2013")
+        base = m["base"].rstrip(" :-–")
+    kind = next((k for k in ("reissue", "weak_reissue", "format") if k in kinds), None)
     return base, (" ".join(labels) or None), kind
 
 
 def normalize_title(title: str) -> str:
     t = title.lower().replace("&", " and ")
-    t = re.sub(r"['\u2019`.]", "", t)
+    t = re.sub(r"['’`.]", "", t)
     t = re.sub(r"[^a-z0-9]+", " ", t).strip()
     return re.sub(r"^(the|a|an) ", "", t)
 
@@ -228,7 +232,7 @@ def provisional_title_ids(movie_ids: list[str]) -> dict[str, str]:
 def _year_of(r: dict) -> int:
     """Year for a re-release label: its release date, unless that is an older original's date."""
     d = r["release_date"]
-    if d is not None and d >= r["first_weekend"] - RELEASE_DATE_GAP:
+    if d is not None and d >= r["first_weekend"] - OWN_DATE_WINDOW:
         return d.year
     return r["first_weekend"].year
 
@@ -237,69 +241,57 @@ def _with_year(label: str, year: int) -> str:
     return label if YEAR_RE.search(label) else f"{year} {label}"
 
 
+def _same_distributor(a: dict, b: dict) -> bool:
+    return bool(a["distributor"]) and a["distributor"] == b["distributor"]
+
+
 def detect_rereleases(rels: list[dict]) -> list[dict]:
-    """Mark re-releases and link each to the release it re-releases.
+    """Mark re-releases and link each to the release it re-releases, when that's safe.
 
-    ``rels`` items need movie_id, title, release_date and first_weekend. Rules,
-    first match wins:
+    ``rels`` items need movie_id, title, distributor, release_date and
+    first_weekend. A release is a re-release when:
 
-    1. ``title_keyword``: the title carries re-release wording, e.g. "(Special Edition)".
-    2. ``id_suffix``: the legacy id is an earlier release's id plus a re-release
-       suffix (``starwars`` -> ``starwarsse``) and the titles agree.
-    3. ``format_rerelease``: a 3D/IMAX title or id suffix, and the same film first
-       charted 7+ years earlier. Sequels like "Step Up 3D" come sooner.
-    4. ``release_date_gap``: first charted a year or more after its release date,
-       e.g. Star Wars (1977) charting in 1982.
-    5. ``same_title_later``: same title as a release first charted 2+ years
-       earlier. Remakes can trip this; M3's Wikidata matching has the final say.
+    1. ``title_keyword``: its title carries re-release wording, e.g. "(Re-issue)"
+       or "(Special Edition)". "Final Cut"/"Extended" after a colon count only
+       if the base title charted before ("Urban Legends: Final Cut" is a sequel).
+    2. ``format_rerelease``: it's a 3D/IMAX version of a film the same
+       distributor first charted 7+ years earlier. That rules out sequels
+       ("Step Up 3D") and new films ("The Nutcracker in 3D").
+
+    Box Office Mojo reuses titles for remakes and unrelated films, and its
+    legacy ids follow the title, so a title match alone proves nothing (the
+    2010 "Breathless" re-issue is Godard's, not the 1983 remake). A re-issue
+    links to an earlier same-titled release only when the distributor matches
+    or that release is itself a re-issue. Unlinked re-releases keep their own
+    title_id until M3 matches titles through Wikidata.
 
     Adds base_title, label, is_rerelease, rerelease_reason and parent_movie_id.
     """
     rels = sorted(rels, key=lambda r: (r["first_weekend"], r["movie_id"]))
-    by_id = {r["movie_id"]: r for r in rels}
-    earliest_by_base: dict[str, dict] = {}
     for r in rels:
         base, suffix, kind = split_title(r["title"] or r["movie_id"])
         r.update(base_title=normalize_title(base) or r["movie_id"], suffix=suffix, suffix_kind=kind,
                  label=None, is_rerelease=False, rerelease_reason=None, parent_movie_id=None)
 
-    def id_parent(r: dict, pattern: re.Pattern[str]) -> dict | None:
-        m = pattern.search(r["movie_id"])
-        if not m or m.start() == 0:
-            return None
-        p = by_id.get(r["movie_id"][: m.start()])
-        if p is None or p["first_weekend"] >= r["first_weekend"]:
-            return None
-        return p if fuzz.ratio(p["base_title"], r["base_title"]) >= ID_SIMILARITY else None
-
+    by_base: dict[str, list[dict]] = defaultdict(list)
     for r in rels:
-        same = earliest_by_base.get(r["base_title"])
-        year = _year_of(r)
-        if r["suffix_kind"] == "reissue":
-            parent = id_parent(r, ID_REISSUE_SUFFIX_RE) or id_parent(r, ID_FORMAT_SUFFIX_RE) or same
-            r.update(is_rerelease=True, rerelease_reason="title_keyword", label=_with_year(r["suffix"], year))
-        elif p := id_parent(r, ID_REISSUE_SUFFIX_RE):
-            parent = p
-            r.update(is_rerelease=True, rerelease_reason="id_suffix",
-                     label=_with_year(r["suffix"], year) if r["suffix"] else f"{year} re-release")
-        elif (r["suffix_kind"] == "format" or ID_FORMAT_SUFFIX_RE.search(r["movie_id"])) and (
-            p := id_parent(r, ID_FORMAT_SUFFIX_RE) or same
-        ) and r["first_weekend"] - p["first_weekend"] >= FORMAT_MIN_GAP:
-            parent = p
-            r.update(is_rerelease=True, rerelease_reason="format_rerelease",
-                     label=_with_year(r["suffix"] or "re-release", year))
-        elif r["release_date"] is not None and r["first_weekend"] - r["release_date"] >= RELEASE_DATE_GAP:
-            parent = same
-            r.update(is_rerelease=True, rerelease_reason="release_date_gap",
-                     label=f"{r['first_weekend'].year} re-release")
-        elif same is not None and not r["suffix_kind"] and r["first_weekend"] - same["first_weekend"] >= SAME_TITLE_MIN_GAP:
-            parent = same
-            r.update(is_rerelease=True, rerelease_reason="same_title_later", label=f"{year} re-release")
-        else:
-            parent = None
+        earlier = [p for p in by_base[r["base_title"]] if p["first_weekend"] < r["first_weekend"]]
+        kind = r["suffix_kind"]
+        parent = None
+        if kind == "reissue" or (kind == "weak_reissue" and earlier):
+            r.update(is_rerelease=True, rerelease_reason="title_keyword",
+                     label=_with_year(r["suffix"], _year_of(r)))
+            parent = next((p for p in earlier
+                           if _same_distributor(p, r) or p["rerelease_reason"] == "title_keyword"), None)
+        elif kind == "format":
+            parent = next((p for p in earlier if _same_distributor(p, r)
+                           and r["first_weekend"] - p["first_weekend"] >= FORMAT_MIN_GAP), None)
+            if parent is not None:
+                r.update(is_rerelease=True, rerelease_reason="format_rerelease",
+                         label=_with_year(r["suffix"], _year_of(r)))
         if parent is not None:
             r["parent_movie_id"] = parent["movie_id"]
-        earliest_by_base.setdefault(r["base_title"], r)
+        by_base[r["base_title"]].append(r)
     return rels
 
 
@@ -392,23 +384,25 @@ def normalize(raw: pl.DataFrame, title_groups: list[dict] | None = None) -> Inge
     }
 
     rels = detect_rereleases(agg.drop("_n_title", "_n_studio", "_n_release_date").to_dicts())
-    parent_of = {r["movie_id"]: r["parent_movie_id"] for r in rels}
-    tids = provisional_title_ids([r["movie_id"] for r in rels])
-    for r in rels:
-        r["title_id"] = tids[_root(r["movie_id"], parent_of)]
-        r["group_source"] = "auto"
 
-    # Hand-curated groupings (data/manual/title_groups.csv) win over detection.
-    manual_applied = 0
+    # Hand-curated groupings (data/manual/title_groups.csv) win over detection. They are
+    # authoritative: the CSV sets the title_id and label (a label marks a re-release), and
+    # releases detected as re-releases of an overridden one follow its new title_id.
+    tids = provisional_title_ids([r["movie_id"] for r in rels])
     groups = {g["source_key"]: g for g in (title_groups or [])}
+    manual_applied = 0
     for r in rels:
+        r["group_source"] = "auto"
         g = groups.get(r["movie_id"])
         if g:
-            r["title_id"] = g["title_id"]
-            if g.get("release_label"):
-                r["label"] = g["release_label"]
-            r["group_source"] = "manual"
+            label = g.get("release_label") or None
+            r.update(is_rerelease=label is not None, rerelease_reason="manual" if label else None,
+                     label=label, parent_movie_id=None, group_source="manual")
+            tids[r["movie_id"]] = g["title_id"]
             manual_applied += 1
+    parent_of = {r["movie_id"]: r["parent_movie_id"] for r in rels}
+    for r in rels:
+        r["title_id"] = tids[_root(r["movie_id"], parent_of)]
 
     releases = pl.DataFrame(
         [
