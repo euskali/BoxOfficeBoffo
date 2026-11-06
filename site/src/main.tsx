@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router'
 import App from './App'
 import './index.css'
 
-// Vite's BASE_URL ends with a slash ("/" or "/BoxOfficeBoffo/"); the router wants none.
+// Vite's BASE_URL ends with a slash ("/" or "/BoxOfficeBozo/"); the router wants none.
 const basename = import.meta.env.BASE_URL.replace(/\/+$/, '') || undefined
 
 createRoot(document.getElementById('root')!).render(

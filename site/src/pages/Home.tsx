@@ -27,7 +27,7 @@ export default function Home() {
       <SectionBar>Welcome</SectionBar>
       <h1>Hello 1999</h1>
       <p>
-        Welcome, traveler! The BoxOfficeBoffo time machine is still under construction. Soon you
+        Welcome, traveler! The BoxOfficeBozo time machine is still under construction. Soon you
         will be able to pick any date and see the all-time box office rankings exactly as they
         stood on that day. Until then, grab a seat and watch the progress below.
       </p>

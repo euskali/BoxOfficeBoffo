@@ -1,9 +1,9 @@
 # Data Notice
 
-BoxOfficeBoffo is a free, non-commercial hobby project. This notice says where the site's data comes from, what terms each source sets, and how to ask for something to be removed or corrected.
+BoxOfficeBozo is a free, non-commercial hobby project. This notice says where the site's data comes from, what terms each source sets, and how to ask for something to be removed or corrected.
 
 ## Not affiliated
-BoxOfficeBoffo is an independent fan project. It is **not affiliated with, endorsed by, or sponsored by** IMDb.com, Inc., Box Office Mojo, IMDbPro, Amazon, The Numbers / Nash Information Services, the Internet Archive, Common Crawl, the Wikimedia Foundation or Wikidata, the U.S. Bureau of Labor Statistics, Cinema United (formerly NATO), Purdue University, or any film studio or distributor.
+BoxOfficeBozo is an independent fan project. It is **not affiliated with, endorsed by, or sponsored by** IMDb.com, Inc., Box Office Mojo, IMDbPro, Amazon, The Numbers / Nash Information Services, the Internet Archive, Common Crawl, the Wikimedia Foundation or Wikidata, the U.S. Bureau of Labor Statistics, Cinema United (formerly NATO), Purdue University, or any film studio or distributor.
 
 Box Office Mojo and IMDb are trademarks of IMDb.com, Inc. Other trademarks belong to their owners. Film titles and people's names are used only to identify the films and people they refer to.
 
@@ -39,14 +39,14 @@ Box Office Mojo and IMDb are trademarks of IMDb.com, Inc. Other trademarks belon
 - Years without a sourced ticket price are interpolated by the build and flagged as interpolated on the site.
 
 ## Our own calculations
-Inflation-adjusted dollars, estimated admissions, all-time ranks "as of" a date, and career totals are BoxOfficeBoffo's own calculations from the sources above. They're estimates, they may contain errors, and they are not official figures from any source. The site's About page explains the method.
+Inflation-adjusted dollars, estimated admissions, all-time ranks "as of" a date, and career totals are BoxOfficeBozo's own calculations from the sources above. They're estimates, they may contain errors, and they are not official figures from any source. The site's About page explains the method.
 
 ## No warranty
 The data is provided as is, without warranty of any kind, for entertainment and research.
 
 ## Takedown and correction requests
 If you hold rights in material used here and want it removed, or you've spotted an error:
-- Open an issue with the **Takedown or correction request** template: https://github.com/euskali/BoxOfficeBoffo/issues/new?template=takedown.md
+- Open an issue with the **Takedown or correction request** template: https://github.com/euskali/BoxOfficeBozo/issues/new?template=takedown.md
 - Or contact the maintainer through their GitHub profile: https://github.com/euskali
 
 We respond promptly. Accepted takedowns are removed from the repository and from the next site build, and the material is excluded from future builds. Formal copyright notices can also go to GitHub under its DMCA Takedown Policy (https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy).

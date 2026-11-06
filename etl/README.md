@@ -1,6 +1,6 @@
 # boffo-etl
 
-Python 3.12 ETL package (`boffo_etl`) for BoxOfficeBoffo, managed with `uv`.
+Python 3.12 ETL package (`boffo_etl`) for BoxOfficeBozo, managed with `uv`.
 
 ## Run
 

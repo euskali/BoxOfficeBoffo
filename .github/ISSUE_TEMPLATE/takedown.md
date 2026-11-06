@@ -1,6 +1,6 @@
 ---
 name: Takedown or correction request
-about: Ask us to remove or correct data or content on BoxOfficeBoffo
+about: Ask us to remove or correct data or content on BoxOfficeBozo
 title: "Takedown: "
 labels: takedown
 ---

@@ -1,10 +1,12 @@
-# BoxOfficeBoffo
+# BoxOfficeBozo
 
 **Box office history, as it happened.**
 
 A free hobby site that brings back the old Box Office Mojo charts, plus a "time machine": pick any film and any date to see where it ranked on the all-time lists *at that moment*. It covers nominal dollars, inflation-adjusted dollars, and estimated tickets sold, with career totals for directors and actors as of any date.
 
 Looks like 1999. Works like 2026.
+
+🌐 **Live:** https://boxofficebozo.com
 
 - 🗺️ [Roadmap](ROADMAP.md)
 - 🛠️ [MVP plan](docs/MVP_PLAN.md)

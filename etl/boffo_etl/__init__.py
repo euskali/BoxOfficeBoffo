@@ -1,3 +1,3 @@
-"""BoxOfficeBoffo ETL package."""
+"""BoxOfficeBozo ETL package."""
 
 __version__ = "0.1.0"

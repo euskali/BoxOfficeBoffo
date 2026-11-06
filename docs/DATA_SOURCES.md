@@ -2,7 +2,7 @@
 
 Status key: ✅ use in MVP · 🔜 later phase · 📚 reference/manual · ⛔ not used (terms)
 
-BoxOfficeBoffo is a **non-commercial hobby project** with a **public repo**. The repo holds code, docs, and cited manual CSVs only. Everything fetched or derived is built in CI and published only in the GitHub Pages artifact. If any of that changes, revisit this file and `DATA_NOTICE.md` first.
+BoxOfficeBozo is a **non-commercial hobby project** with a **public repo**. The repo holds code, docs, and cited manual CSVs only. Everything fetched or derived is built in CI and published only in the GitHub Pages artifact. If any of that changes, revisit this file and `DATA_NOTICE.md` first.
 
 ## Core (MVP)
 
