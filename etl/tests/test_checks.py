@@ -108,10 +108,63 @@ def test_gaps_and_non_sunday_weekends(repo, capsys):
     ]
     write_tables(repo, rows)
     code, out = run(capsys)
-    assert code == 0
-    assert "2 weekends have no chart (gap report)" in out
-    assert "weekend ending 1990-01-14; weekend ending 1990-01-21" in out
+    assert code == 1  # M2 accept: a missing weekend needs a gap-report reason
+    assert "2 weekends are missing without a gap-report reason" in out
+    assert "weekend ending 1990-01-14 (no entry); weekend ending 1990-01-21 (no entry)" in out
     assert "1 weekends don't end on a Sunday, e.g. 1990-02-05 (Monday)" in out
+
+
+def write_bom(repo, weekends: list[tuple], **report) -> None:
+    build = repo / "data" / "build"
+    build.mkdir(parents=True, exist_ok=True)
+    lines = ["code,weekend_end,status,archive,style,capture_url,rows,unkeyed_rows,overlap,notes"]
+    lines += [f"{c},{d},{st},,,,0,0,{'true' if ov else 'false'},{note}" for c, d, st, ov, note in weekends]
+    (build / "bom_weekend_weekends.csv").write_text("".join(x + chr(10) for x in lines), encoding="utf-8")
+    main = [w for w in weekends if not w[3]]
+    base = {"weekends": len(main), "first_weekend": main[0][0], "latest_weekend": main[-1][0],
+            "latest_weekend_end": weekends[-1][1], "as_of": "1990-02-20", "statuses": {}, "archives": {},
+            "styles": {}, "snapshot_rows": 0, "estimate_rows": 0, "links": {}, "release_pages": {},
+            "unlinked_carryovers": [], "link_conflicts": [], "unkeyed_rows": 0}
+    (build / "bom_weekend_report.json").write_text(json.dumps({**base, **report}), encoding="utf-8")
+
+
+def test_gap_report_explains_missing_weekends(repo, capsys):
+    write_tables(repo, [snap(0, "a", 1, 100), snap(2, "a", 1, 300)])
+    write_bom(repo, [("1990W02", "1990-01-14", "ok", False, ""), ("1990W03", "1990-01-21", "ok", False, ""),
+                     ("1990W04", "1990-01-28", "no_capture", False, ""),
+                     ("1990W05", "1990-02-04", "empty_chart", False, "")],
+              latest_weekend_end="1990-02-04")
+    code, out = run(capsys)
+    assert "1 weekends are missing without a gap-report reason, e.g. weekend ending 1990-01-14 (ok)" in out
+    assert "no capture in either archive (Wayback Machine, Common Crawl): e.g. 1990W04 (ending 1990-01-28)" in out
+    assert "archived chart lists no films: e.g. 1990W05 (ending 1990-02-04)" in out
+    assert code == 1
+
+
+def test_gap_report_covers_through_the_latest_weekend(repo, capsys):
+    write_tables(repo, [snap(w, "a", 1, 100 * (w + 1)) for w in range(3)])
+    write_bom(repo, [("1990W02", "1990-01-14", "ok", False, ""), ("1990W03", "1990-01-21", "ok", False, ""),
+                     ("1990W04", "1990-01-28", "no_capture", False, "")])
+    code, out = run(capsys)
+    assert code == 0, out
+    assert "(latest completed weekend 1990-01-28), 1 missing" in out
+
+
+def test_bom_report_errors_and_warnings(repo, capsys):
+    write_tables(repo, [snap(w, "a", 1, 100 * (w + 1)) for w in range(4)])
+    write_bom(repo, [("1989W52", "1989-12-31", "no_capture", True, ""),
+                     ("1990W02", "1990-01-14", "error", False, "wayback lookup failed: HTTP 503"),
+                     ("1990W03", "1990-01-21", "pending", False, "fetch time budget used up"),
+                     ("1990W04", "1990-01-28", "unchecked", False, "")],
+              unlinked_carryovers=[{"bom_release_id": "rl1", "title": "Holdover", "weeks": 3, "total_gross": 9}],
+              link_conflicts=["rl2: tied between legacy:x and legacy:y"])
+    code, out = run(capsys)
+    assert code == 1
+    assert "1 weekends: archive lookup failed (retried next run), e.g. 1990W02 (wayback lookup failed" in out
+    assert "1 weekends: not fetched yet" in out and "1 weekends: not in the Wayback Machine" in out
+    assert "1 stat695 weekends couldn't be re-read for stitching" in out
+    assert "1 films charting on 1990W02 were already in release" in out and "rl1 'Holdover' (week 3)" in out
+    assert "1 stitching conflicts left unlinked" in out
 
 
 def test_release_integrity_errors(repo, capsys):

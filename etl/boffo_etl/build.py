@@ -15,7 +15,7 @@ import polars as pl
 from . import paths
 from .fetch import FetchDisabledError
 from .manual import validate_manual_dir
-from .sources import stat695
+from .sources import bom_weekend, stat695
 
 REQUIRE_DATA_FLAG = "BOFFO_REQUIRE_DATA"
 
@@ -23,7 +23,7 @@ REQUIRE_DATA_FLAG = "BOFFO_REQUIRE_DATA"
 # Each step writes its per-source tables to data/build/.
 STEPS: list[tuple[str, str, Callable[[], object] | None]] = [
     ("stat695", "M1", stat695.run),
-    ("bom_weekend", "M2", None),
+    ("bom_weekend", "M2", bom_weekend.run),
     ("wikidata", "M3/M4", None),
     ("cpi", "M5", None),
 ]
@@ -31,6 +31,10 @@ STEPS: list[tuple[str, str, Callable[[], object] | None]] = [
 # Shipped tables and the per-source parts in data/build/ they are combined from.
 SNAPSHOT_SOURCES = ("stat695", "bom_weekend")
 PUBLISHED = ("snapshots", "releases")
+
+# releases.parquet as shipped: the per-source columns plus the new-site release id (rl...),
+# for stat695 releases too when M2 stitched a carry-over film to one.
+PUBLISHED_RELEASE_SCHEMA = {**stat695.RELEASE_SCHEMA, "bom_release_id": pl.String}
 
 
 def _table_entry(path: Path) -> dict:
@@ -44,16 +48,53 @@ def _table_entry(path: Path) -> dict:
     }
 
 
+def assemble_releases(releases: pl.DataFrame, snapshots: pl.DataFrame, links: pl.DataFrame | None) -> pl.DataFrame:
+    """Add bom_release_id and recount each release's weekends across all sources.
+
+    A stat695 release that M2 stitched to an rl release keeps charting after
+    2016, so its first/last weekend and weekend count come from every snapshot.
+    """
+    own = pl.when(pl.col("source") == bom_weekend.SOURCE).then(pl.col("source_key"))
+    out = releases.with_columns(own.alias("bom_release_id"))
+    if links is not None and links.height:
+        out = out.join(links.select("release_id", pl.col("bom_release_id").alias("_linked")),
+                       on="release_id", how="left").with_columns(
+            pl.coalesce("bom_release_id", "_linked").alias("bom_release_id")).drop("_linked")
+    spans = snapshots.group_by("release_id").agg(
+        pl.col("weekend_end").min().alias("_first"), pl.col("weekend_end").max().alias("_last"),
+        pl.col("weekend_end").n_unique().cast(pl.Int32).alias("_n"))
+    out = (out.join(spans, on="release_id", how="left")
+           .with_columns(pl.coalesce("_first", "first_weekend").alias("first_weekend"),
+                         pl.coalesce("_last", "last_weekend").alias("last_weekend"),
+                         pl.coalesce("_n", "weekends").alias("weekends"))
+           .drop("_first", "_last", "_n"))
+    return out.select(list(PUBLISHED_RELEASE_SCHEMA)).cast(PUBLISHED_RELEASE_SCHEMA).sort("first_weekend", "release_id")
+
+
+def _parts(table: str) -> list[pl.DataFrame]:
+    files = [paths.data_build() / f"{src}_{table}.parquet" for src in SNAPSHOT_SOURCES]
+    return [pl.read_parquet(p) for p in files if p.is_file()]
+
+
 def publish_tables() -> list[dict]:
     """Combine per-source parts into site/public/data/<table>.parquet."""
     tables = []
-    for table in PUBLISHED:
-        parts = [paths.data_build() / f"{src}_{table}.parquet" for src in SNAPSHOT_SOURCES]
-        parts = [p for p in parts if p.is_file()]
-        if not parts:
-            continue
-        out = paths.site_data() / f"{table}.parquet"
-        pl.concat([pl.read_parquet(p) for p in parts], how="diagonal_relaxed").write_parquet(out)
+    snaps = _parts("snapshots")
+    if snaps:
+        snapshots = pl.concat(snaps, how="diagonal_relaxed").sort("weekend_end", "rank", "release_id",
+                                                                   nulls_last=True)
+        out = paths.site_data() / "snapshots.parquet"
+        snapshots.write_parquet(out)
+        tables.append(_table_entry(out))
+    else:
+        snapshots = pl.DataFrame(schema=stat695.SNAPSHOT_SCHEMA)
+    rels = _parts("releases")
+    if rels:
+        links_path = paths.data_build() / "bom_weekend_links.parquet"
+        links = pl.read_parquet(links_path) if links_path.is_file() else None
+        releases = assemble_releases(pl.concat(rels, how="diagonal_relaxed"), snapshots, links)
+        out = paths.site_data() / "releases.parquet"
+        releases.write_parquet(out)
         tables.append(_table_entry(out))
     return tables
 

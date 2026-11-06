@@ -8,8 +8,10 @@ corrections go through cited ``data/manual/`` overrides.
 
 from __future__ import annotations
 
+import csv
 import json
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -138,6 +140,70 @@ def check_stat695_report() -> list[Issue]:
 
 # --- snapshots and releases (all sources) -----------------------------------
 
+# --- M2: archived Box Office Mojo weekends --------------------------------------
+
+BOM_REPORT = "bom_weekend_report.json"
+BOM_WEEKENDS = "bom_weekend_weekends.csv"
+GAP_REASONS = {
+    "no_capture": "no capture in either archive (Wayback Machine, Common Crawl)",
+    "empty_chart": "archived chart lists no films",
+}
+UNFINISHED = {
+    "error": "archive lookup failed (retried next run)",
+    "pending": "not fetched yet: the run's fetch time ran out (continues next run)",
+    "unchecked": "not in the Wayback Machine, and the Common Crawl index couldn't be read",
+}
+
+
+def _bom_weekends() -> list[dict] | None:
+    path = paths.data_build() / BOM_WEEKENDS
+    if not path.is_file():
+        return None
+    with path.open(newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
+
+
+def check_bom_weekend_report() -> list[Issue]:
+    path = paths.data_build() / BOM_REPORT
+    weekends = _bom_weekends()
+    if not path.is_file() or weekends is None:
+        return []
+    name = BOM_REPORT
+    report = json.loads(path.read_text(encoding="utf-8"))
+    issues: list[Issue] = []
+    main = [w for w in weekends if w["overlap"] != "true"]
+    print(f"bom_weekend: {report['weekends']} weekends {report['first_weekend']} to {report['latest_weekend']} "
+          f"as of {report['as_of']}: {report['statuses']}; archives {report['archives']}, "
+          f"page styles {report['styles']}; {report['snapshot_rows']} snapshots, "
+          f"{report['estimate_rows']} still estimates; links {report['links']}; "
+          f"release pages {report['release_pages']}")
+    for status, why in UNFINISHED.items():
+        rows = [w for w in main if w["status"] == status]
+        if rows:
+            issues.append(Issue("error", name, 0, f"{len(rows)} weekends: {why}, "
+                                + _examples([(w["code"], w["notes"]) for w in rows],
+                                            lambda r: f"{r[0]} ({r[1][:120]})")))
+    overlap_bad = [w for w in weekends if w["overlap"] == "true" and w["status"] != "ok"]
+    if overlap_bad:
+        issues.append(Issue("warning", name, 0, f"{len(overlap_bad)} stat695 weekends couldn't be re-read for "
+                            "stitching, " + _examples([(w["code"], w["status"]) for w in overlap_bad],
+                                                      lambda r: f"{r[0]} ({r[1]})")))
+    carry = report.get("unlinked_carryovers") or []
+    if carry:
+        issues.append(Issue("error", name, 0,
+                            f"{len(carry)} films charting on {report['first_weekend']} were already in release "
+                            "but aren't stitched to a stat695 release, so their total_gross restarts, "
+                            + _examples([(c["bom_release_id"], c["title"], c["weeks"]) for c in carry],
+                                        lambda r: f"{r[0]} {r[1]!r} (week {r[2]})")))
+    if report.get("link_conflicts"):
+        issues.append(Issue("warning", name, 0, f"{len(report['link_conflicts'])} stitching conflicts left unlinked, "
+                            + _examples([(c,) for c in report["link_conflicts"]], lambda r: r[0])))
+    if report.get("unkeyed_rows"):
+        issues.append(Issue("warning", name, 0, f"{report['unkeyed_rows']} chart rows had no release link "
+                            "and were skipped"))
+    return issues
+
+
 SNAPSHOT_COLUMNS = ("weekend_end", "release_id", "title_id", "rank", "weekend_gross", "theaters",
                     "total_gross", "weeks", "source", "capture_url", "is_estimate")
 
@@ -209,19 +275,39 @@ def check_snapshots() -> list[Issue]:
                             f"{len(not_sunday)} weekends don't end on a Sunday, "
                             + _examples(not_sunday, lambda r: f"{r[0]} ({r[1]})")))
 
-    # Weekly coverage: every Sunday between the first and last chart should have one.
+    # Weekly coverage: every Sunday from the first chart through the latest completed weekend
+    # (as of the M2 run) should have one, or be in the gap report with a reason.
     # A chart that ends on a holiday Monday counts for the Sunday before it.
-    gaps = rows("""
+    report_path = paths.data_build() / BOM_REPORT
+    latest = None
+    if report_path.is_file():
+        latest = json.loads(report_path.read_text(encoding="utf-8")).get("latest_weekend_end")
+    gaps = rows(f"""
         WITH w AS (SELECT DISTINCT CAST(weekend_end - CAST(dayofweek(weekend_end) AS INTEGER) AS DATE) AS sun FROM s),
         all_sundays AS (
-            SELECT CAST(unnest(generate_series(min(sun), max(sun), INTERVAL 7 DAY)) AS DATE) AS sun FROM w)
+            SELECT CAST(unnest(generate_series(min(sun), greatest(max(sun), {"DATE '" + latest + "'" if latest else "max(sun)"}),
+                                               INTERVAL 7 DAY)) AS DATE) AS sun FROM w)
         SELECT sun FROM all_sundays WHERE sun NOT IN (SELECT sun FROM w) ORDER BY sun""")
     span = rows("SELECT min(weekend_end), max(weekend_end), count(DISTINCT weekend_end) FROM s")[0]
-    print(f"snapshots: {span[2]} weekends from {span[0]} to {span[1]}, {len(gaps)} missing")
-    if gaps:
+    print(f"snapshots: {span[2]} weekends from {span[0]} to {span[1]}"
+          + (f" (latest completed weekend {latest})" if latest else "") + f", {len(gaps)} missing")
+    status = {w["weekend_end"]: w for w in (_bom_weekends() or []) if w["overlap"] != "true"}
+    explained: dict[str, list[tuple]] = {}
+    unexplained = []
+    for (sun,) in gaps:
+        w = status.get(sun.isoformat())
+        if w and w["status"] in GAP_REASONS:
+            explained.setdefault(w["status"], []).append((sun, w["code"]))
+        else:
+            unexplained.append((sun, w["status"] if w else "no entry"))
+    for st, items in explained.items():
         issues.append(Issue("warning", name, 0,
-                            f"{len(gaps)} weekends have no chart (gap report), "
-                            + _examples(gaps, lambda r: f"weekend ending {r[0]}", limit=GAPS_LISTED)))
+                            f"gap report: {len(items)} weekends have no chart, {GAP_REASONS[st]}: "
+                            + _examples(items, lambda r: f"{r[1]} (ending {r[0]})", limit=GAPS_LISTED)))
+    if unexplained:
+        issues.append(Issue("error", name, 0,
+                            f"{len(unexplained)} weekends are missing without a gap-report reason, "
+                            + _examples(unexplained, lambda r: f"weekend ending {r[0]} ({r[1]})", limit=GAPS_LISTED)))
     con.close()
     return issues
 
@@ -251,6 +337,14 @@ def check_releases() -> list[Issue]:
         if orphans:
             issues.append(Issue("error", name, 0, f"{len(orphans)} snapshot release_ids are missing from releases, "
                                 + _examples(orphans, lambda x: x[0])))
+        cols = [r[0] for r in con.execute("DESCRIBE r").fetchall()]
+        if "bom_release_id" in cols:
+            dup_rl = con.execute("""
+                SELECT bom_release_id, string_agg(release_id, ', ') FROM r WHERE bom_release_id IS NOT NULL
+                GROUP BY 1 HAVING count(*) > 1 ORDER BY 1""").fetchall()
+            if dup_rl:
+                issues.append(Issue("error", name, 0, f"{len(dup_rl)} rl release ids belong to several releases, "
+                                    + _examples(dup_rl, lambda x: f"{x[0]}: {x[1]}")))
         mismatched = con.execute("""
             SELECT DISTINCT s.release_id, s.title_id, r.title_id FROM s JOIN r USING (release_id)
             WHERE s.title_id IS DISTINCT FROM r.title_id ORDER BY 1""").fetchall()
@@ -269,6 +363,7 @@ CHECKS: list[Callable[[], list[Issue]]] = [
     check_manual,
     check_built_tables,
     check_stat695_report,
+    check_bom_weekend_report,
     check_snapshots,
     check_releases,
 ]

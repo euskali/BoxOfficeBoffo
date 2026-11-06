@@ -63,7 +63,8 @@ ALLOWLIST: tuple[str, ...] = (
 DEFAULT_MIN_INTERVAL = 5.0
 MAX_REDIRECTS = 5
 MAX_ATTEMPTS = 4
-BACKOFF_BASE = 2.0
+RETRY_DELAYS = (10.0, 30.0, 90.0)  # seconds before attempts 2, 3 and 4 (busy archives recover slowly)
+MAX_BODY_BYTES = 200 * 1024 * 1024  # a whole-file download larger than this is refused
 ENV_FLAG = "BOFFO_FETCH"
 
 
@@ -128,6 +129,10 @@ def _guess_ext(content_type: str | None) -> str:
     return ".bin"
 
 
+def _range_key(url: str, start: int, length: int) -> str:
+    return f"{url}#bytes={start}-{start + length - 1}"
+
+
 class Fetcher:
     def __init__(
         self,
@@ -144,16 +149,17 @@ class Fetcher:
         self._clock = clock
         self._sleep = sleep
         self._last_request: dict[str, float] = {}
+        self.network_requests = 0  # requests actually sent (cache hits don't count)
 
     # -- cache -----------------------------------------------------------
     @staticmethod
-    def _stem(url: str) -> tuple[Path, str]:
-        host = _hostname(url) or "unknown"
-        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:20]
+    def _stem(key: str) -> tuple[Path, str]:
+        host = _hostname(key) or "unknown"
+        digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
         return paths.data_raw() / "http" / host, digest
 
-    def _find_cached(self, url: str) -> Path | None:
-        directory, digest = self._stem(url)
+    def _find_cached(self, key: str) -> Path | None:
+        directory, digest = self._stem(key)
         if not directory.is_dir():
             return None
         for p in sorted(directory.glob(digest + "*")):
@@ -162,6 +168,12 @@ class Fetcher:
             if p.name == digest or p.name.startswith(digest + "."):
                 return p
         return None
+
+    def is_cached(self, url: str, *, byte_range: tuple[int, int] | None = None) -> bool:
+        """True if ``url`` (or that byte range of it) is already in data/raw/."""
+        check_url_policy(url)
+        key = _range_key(url, *byte_range) if byte_range else url
+        return self._find_cached(key) is not None
 
     # -- politeness ------------------------------------------------------
     def _wait_turn(self, host: str) -> None:
@@ -179,27 +191,31 @@ class Fetcher:
             return self._client, False
         return httpx.Client(timeout=60.0, headers={"User-Agent": USER_AGENT}), True
 
-    def _request_once(self, client: httpx.Client, url: str) -> httpx.Response:
+    def _request_once(self, client: httpx.Client, url: str, headers: dict[str, str]) -> httpx.Response:
         host = check_url_policy(url)
         self._wait_turn(host)
-        return client.get(url, headers={"User-Agent": USER_AGENT}, follow_redirects=False)
+        self.network_requests += 1
+        request = client.build_request("GET", url, headers={"User-Agent": USER_AGENT, **headers})
+        # Streamed, so a server that ignores a Range header can't make us read a whole file.
+        return client.send(request, follow_redirects=False, stream=True)
 
-    def _request_with_retries(self, client: httpx.Client, url: str) -> httpx.Response:
+    def _request_with_retries(self, client: httpx.Client, url: str, headers: dict[str, str]) -> httpx.Response:
         last_exc: Exception | None = None
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                resp = self._request_once(client, url)
+                resp = self._request_once(client, url, headers)
             except httpx.TransportError as exc:  # includes timeouts
                 last_exc = exc
                 if attempt == MAX_ATTEMPTS:
                     break
-                self._sleep(BACKOFF_BASE ** (attempt - 1))
+                self._sleep(RETRY_DELAYS[attempt - 1])
                 continue
             if resp.status_code == 429 or resp.status_code >= 500:
+                resp.close()
                 last_exc = FetchError(f"{url} returned HTTP {resp.status_code}")
                 if attempt == MAX_ATTEMPTS:
                     break
-                delay = BACKOFF_BASE ** (attempt - 1)
+                delay = RETRY_DELAYS[attempt - 1]
                 retry_after = resp.headers.get("Retry-After")
                 if retry_after:
                     try:
@@ -211,42 +227,49 @@ class Fetcher:
             return resp
         raise FetchError(f"{url} failed after {MAX_ATTEMPTS} attempts: {last_exc}")
 
-    def _download(self, url: str) -> tuple[httpx.Response, str]:
+    @staticmethod
+    def _read(resp: httpx.Response, limit: int) -> bytes:
+        chunks: list[bytes] = []
+        size = 0
+        try:
+            for chunk in resp.iter_bytes():
+                size += len(chunk)
+                if size > limit:
+                    raise FetchError(f"{resp.request.url} is larger than {limit} bytes; refusing to read it")
+                chunks.append(chunk)
+        finally:
+            resp.close()
+        return b"".join(chunks)
+
+    def _download(
+        self, url: str, *, headers: dict[str, str], accept: tuple[int, ...], limit: int
+    ) -> tuple[httpx.Response, bytes, str]:
         client, owned = self._get_client()
         try:
             current = url
             for _ in range(MAX_REDIRECTS + 1):
-                resp = self._request_with_retries(client, current)
+                resp = self._request_with_retries(client, current, headers)
                 if resp.is_redirect:
+                    resp.close()
                     location = resp.headers.get("Location")
                     if not location:
                         raise FetchError(f"{current} redirected without a Location header")
                     current = urljoin(current, location)
                     check_url_policy(current)  # reject before spending a request
                     continue
-                if resp.status_code != 200:
+                if resp.status_code not in accept:
+                    resp.close()
                     raise FetchError(f"{current} returned HTTP {resp.status_code}")
-                return resp, current
+                return resp, self._read(resp, limit), current
             raise FetchError(f"{url} exceeded {MAX_REDIRECTS} redirects")
         finally:
             if owned:
                 client.close()
 
-    # -- public ----------------------------------------------------------
-    def fetch(self, url: str, *, suffix: str | None = None) -> Path:
-        check_url_policy(url)  # policy first, even for cached URLs
-        cached = self._find_cached(url)
-        if cached is not None:
-            return cached
-        if os.environ.get(ENV_FLAG) != "1":
-            raise FetchDisabledError(
-                f"{url} is not cached in data/raw/. Network fetching runs in the CI "
-                f"data-build job; set {ENV_FLAG}=1 to allow it."
-            )
-        resp, final_url = self._download(url)
-        body = resp.content
+    def _store(self, key: str, url: str, resp: httpx.Response, body: bytes, final_url: str,
+               suffix: str | None, extra: dict) -> Path:
         content_type = resp.headers.get("content-type")
-        directory, digest = self._stem(url)
+        directory, digest = self._stem(key)
         directory.mkdir(parents=True, exist_ok=True)
         ext = suffix if suffix is not None else _guess_ext(content_type)
         if ext and not ext.startswith("."):
@@ -254,6 +277,7 @@ class Fetcher:
         target = directory / (digest + ext)
         meta = {
             "url": url,
+            **extra,
             "final_url": final_url,
             "status": resp.status_code,
             "content_type": content_type,
@@ -265,6 +289,61 @@ class Fetcher:
         self._atomic_write(directory / (target.name + ".meta.json"), json.dumps(meta, indent=2).encode())
         self._atomic_write(target, body)
         return target
+
+    @staticmethod
+    def _require_network(what: str) -> None:
+        if os.environ.get(ENV_FLAG) != "1":
+            raise FetchDisabledError(
+                f"{what} is not cached in data/raw/. Network fetching runs in the CI "
+                f"data-build job; set {ENV_FLAG}=1 to allow it."
+            )
+
+    # -- public ----------------------------------------------------------
+    def fetch(
+        self,
+        url: str,
+        *,
+        suffix: str | None = None,
+        accept_status: tuple[int, ...] = (200,),
+        validate: Callable[[bytes], None] | None = None,
+    ) -> Path:
+        """Return the cached body of ``url``, downloading it first if needed (CI only).
+
+        ``accept_status`` lists the final HTTP statuses whose body is worth
+        caching (an index's "no captures" 404, say). ``validate`` may raise to
+        refuse a body, which then isn't cached (an outage page served as 200).
+        """
+        check_url_policy(url)  # policy first, even for cached URLs
+        cached = self._find_cached(url)
+        if cached is not None:
+            return cached
+        self._require_network(url)
+        resp, body, final_url = self._download(url, headers={}, accept=accept_status, limit=MAX_BODY_BYTES)
+        if validate is not None:
+            try:
+                validate(body)
+            except Exception as exc:  # an outage page served as 200, say: don't cache it
+                raise FetchError(f"{url} returned an unusable body: {exc}") from exc
+        return self._store(url, url, resp, body, final_url, suffix, {})
+
+    def fetch_range(self, url: str, start: int, length: int, *, suffix: str | None = ".bin") -> Path:
+        """Fetch ``length`` bytes of ``url`` from ``start`` (one WARC record, say), cached by range."""
+        if start < 0 or length <= 0:
+            raise FetchError(f"bad byte range {start}+{length} for {url}")
+        check_url_policy(url)
+        key = _range_key(url, start, length)
+        cached = self._find_cached(key)
+        if cached is not None:
+            return cached
+        self._require_network(key)
+        end = start + length - 1
+        resp, body, final_url = self._download(
+            url, headers={"Range": f"bytes={start}-{end}"}, accept=(206,), limit=length + 1024
+        )
+        content_range = resp.headers.get("Content-Range", "")
+        if not content_range.startswith(f"bytes {start}-{end}/") or len(body) != length:
+            raise FetchError(f"{url} answered Range {start}-{end} with {content_range!r} ({len(body)} bytes)")
+        return self._store(key, url, resp, body, final_url, suffix, {"range": [start, end]})
 
     @staticmethod
     def _atomic_write(dest: Path, data: bytes) -> None:
