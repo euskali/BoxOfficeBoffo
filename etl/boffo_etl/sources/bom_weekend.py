@@ -86,6 +86,7 @@ ENV_RELEASE_MINUTES = "BOFFO_RELEASE_PAGE_MINUTES"
 DEFAULT_MINUTES = 270.0
 DEFAULT_RELEASE_PAGES = 150
 DEFAULT_RELEASE_MINUTES = 45.0
+RELEASE_PAGE_MIN_GROSS = 1_000_000  # smaller releases are left to M3's title matching
 CC_INDEX_BUDGET = 60
 
 OK, EMPTY, NO_CAPTURE, UNCHECKED, ERROR, PENDING = "ok", "empty_chart", "no_capture", "unchecked", "error", "pending"
@@ -158,7 +159,7 @@ class Budget:
     cc_queries: int = CC_INDEX_BUDGET
 
     def check(self) -> None:
-        if time.monotonic() > self.deadline:
+        if time.monotonic() >= self.deadline:
             raise BudgetExhausted("fetch time budget used up")
 
 
@@ -792,7 +793,8 @@ def ingest(
                                                                          nulls_last=True)
     eligible_set = set(eligible["key"].to_list())
     order = [rl for rl in links if rl in eligible_set]
-    order += [rl for rl in eligible["key"].to_list() if rl not in links]
+    order += [rl for rl in eligible.filter(pl.col("total_gross") >= RELEASE_PAGE_MIN_GROSS)["key"].to_list()
+              if rl not in links]
     page_deadline = min(budget.deadline, time.monotonic() + release_page_minutes * 60)
     pages, page_stats = release_pages(fetcher, order, lookups=release_page_lookups, deadline=page_deadline)
     pages_df = pl.DataFrame(pages, schema=RELEASE_PAGE_SCHEMA)
